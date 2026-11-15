@@ -118,11 +118,13 @@ def complete(payload: Dict[str, Any], key: str) -> Dict[str, Any]:
             401: "DeepSeek rejected the API key for this agent.",
             402: "DeepSeek reported insufficient account balance.",
             403: "DeepSeek denied this request.",
-            429: "DeepSeek rate limit reached; resume later.",
+            429: "DeepSeek rate limit reached; start a new run later.",
         }
         raise APIError(
             "http_" + str(status),
-            messages.get(status, "DeepSeek returned an HTTP error; the run is paused."),
+            messages.get(
+                status, "DeepSeek returned an HTTP error; the run has stopped."
+            ),
             uncertain=status >= 500,
         ) from None
     except (urllib.error.URLError, OSError, socket.timeout):

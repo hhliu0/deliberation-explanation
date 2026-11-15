@@ -5,11 +5,11 @@ Two independent terminal tools share this repository:
 | Tool | Purpose | Guide |
 | --- | --- | --- |
 | `deepseek_ratings` | Rate statements using one persona and one API key; save full logs and separate Likert scores. | [Ratings](docs/ratings.md) |
-| `deepseek_dialogue` | Run, resume, or inspect a dialogue between two agents using two API keys. | [Dialogue](docs/dialogue.md) |
+| `deepseek_dialogue` | Start a dialogue between two agents using two API keys, or inspect a saved run. | [Dialogue](docs/dialogue.md) |
 
-The rating command starts fresh each time. The dialogue command manages its own
-saved conversation. Neither package imports the other or automatically starts
-its workflow.
+Both tools start a fresh trial each time. The dialogue command also supports
+read-only inspection of saved conversations. Neither package imports the other
+or automatically starts its workflow.
 
 ## Run a rating
 
@@ -42,7 +42,7 @@ Each run reads those files afresh. Accepted replies extend memory in the detaile
 run log; the program does not overwrite the input files or generate separate
 memory text archives. The
 [deliberation guide](docs/deliberation.md) explains the discussion design;
-[dialogue usage](docs/dialogue.md) covers starting, resuming, and inspecting chats.
+[dialogue usage](docs/dialogue.md) covers starting chats and inspecting saved runs.
 Dialogue output defaults to `runs/dialogue/`; rating output defaults to
 `runs/ratings/`.
 

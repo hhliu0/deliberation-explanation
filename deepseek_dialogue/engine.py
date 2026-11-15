@@ -18,7 +18,6 @@ AGENTS = ("agent_a", "agent_b")
 LABELS = {"agent_a": "Agent A", "agent_b": "Agent B"}
 PEER_LIMIT = 512
 FORMAT_VERSION = 2
-RESUME_TARGET = 20
 
 
 def now() -> str:
@@ -151,29 +150,12 @@ def _memory(state: Dict[str, Any], agent: str) -> str:
     transcript = "\n\n".join(
         "[" + item["sender"] + "]\n" + item["content"] for item in state["messages"]
     )
-    if state["settings"].get("memory_format") == "blended":
-        return initial + ("\n\n" if initial and transcript else "") + transcript
-    # Older saved runs retain their original source headings when resumed.
-    return "Initial memory:\n" + initial + "\n\nDialogue so far:\n" + transcript
+    return initial + ("\n\n" if initial and transcript else "") + transcript
 
 
 def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
     """Assemble five file-backed parts; accepted public replies extend memory."""
     settings = state["settings"]["agents"][agent]
-    if state["format_version"] == 1:
-        # Resume historical runs with their original request structure.
-        messages = [{"role": "system", "content": settings["prompt"]}]
-        messages.extend(
-            {"role": "assistant", "name": item["sender"], "content": item["content"]}
-            for item in state["messages"]
-        )
-        return {
-            "model": settings["model"],
-            **copy.deepcopy(_generation(state, agent)),
-            "messages": messages,
-            "stream": False,
-        }
-
     parts = settings["inputs"]
     model_config = copy.deepcopy(settings["model_config"])  # 1. API settings
     persona = parts["persona"]  # 2. This agent's identity and perspective
@@ -240,30 +222,14 @@ def _reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> P
     return path
 
 
-def _chat_path(chat_id: str, output_dir: Path) -> Path:
-    reference = chat_id.strip()
-    if not reference:
-        raise DialogueError("Enter a chat ID or saved JSON path.")
-    if Path(reference).suffix.lower() == ".json":
-        return Path(reference)
-    try:
-        identifier = uuid.UUID(reference).hex
-    except ValueError:
-        raise DialogueError("Enter a valid chat ID or saved JSON path.") from None
-    return output_dir / (identifier + ".json")
-
-
 @contextmanager
-def _chat_lock(path: Path):
-    """Prevent two local commands from overwriting the same conversation."""
+def _run_lock(path: Path):
+    """Prevent concurrent writers from overwriting the same run."""
     lock = path.with_suffix(path.suffix + ".lock")
     try:
         descriptor = os.open(str(lock), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        raise DialogueError(
-            "This chat is locked by another command. If that process has exited, "
-            "remove the adjacent .json.lock file before resuming."
-        ) from None
+        raise DialogueError("This run is locked by another command.") from None
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write(str(os.getpid()) + "\n")
@@ -276,6 +242,7 @@ def _chat_lock(path: Path):
 
 
 def _read_state(path: Path) -> Dict[str, Any]:
+    """Validate current and historical snapshots for read-only inspection."""
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(state, dict) or state.get("format_version") not in (1, 2):
@@ -314,8 +281,6 @@ def _read_state(path: Path) -> Dict[str, Any]:
         ):
             raise ValueError()
         if not isinstance(state.get("interruption_notes", []), list):
-            raise ValueError()
-        if not isinstance(state.get("resume_notes", []), list):
             raise ValueError()
         attempts = {}
         for attempt in state["attempts"]:
@@ -411,13 +376,9 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
         "prompt_cache_hit_tokens",
         "prompt_cache_miss_tokens",
     )
-    for agent in (*AGENTS, "all", "current_trial"):
+    for agent in (*AGENTS, "all"):
         attempts = [
-            a
-            for a in state["attempts"]
-            if agent == "all"
-            or a["agent"] == agent
-            or (agent == "current_trial" and a["trial_id"] == state["trial_id"])
+            a for a in state["attempts"] if agent == "all" or a["agent"] == agent
         ]
         labels = ("input", "output", "thinking", "total", "cache hit", "cache miss")
         chunks = []
@@ -437,11 +398,7 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
             if missing and known:
                 value_text += " (+ " + str(missing) + " unknown requests)"
             chunks.append(label + "=" + value_text)
-        label = (
-            "Whole history"
-            if agent == "all"
-            else ("Current trial" if agent == "current_trial" else LABELS[agent])
-        )
+        label = "Whole history" if agent == "all" else LABELS[agent]
         emit(
             label
             + " totals (local, "
@@ -488,10 +445,10 @@ def _execute(
                 if failure:
                     pending["status"] = "rejected"
                     pending["error_code"] = failure
-                    state["status"] = "paused"
+                    state["status"] = "stopped"
                     _save(path, state, keys)
                     emit(
-                        "Paused: "
+                        "Stopped: "
                         + failure
                         + ". No message was delivered to the counterpart."
                     )
@@ -526,16 +483,16 @@ def _execute(
                 pending["status"] = "unknown" if error.uncertain else "error"
                 pending["error_code"] = error.code
                 pending["finished_at"] = now()
-                state["status"] = "paused"
+                state["status"] = "stopped"
                 _save(path, state, keys)
-                emit("Paused: " + str(error))
+                emit("Stopped: " + str(error))
                 break
             except DialogueError:
                 # A response containing a credential is never retained, even in diagnostics.
                 if pending is not None and "response" not in pending:
                     pending["status"] = "error"
                     pending["error_code"] = "credential_in_response"
-                    state["status"] = "paused"
+                    state["status"] = "stopped"
                     _save(path, state, keys)
                 raise
         else:
@@ -556,7 +513,7 @@ def _execute(
         if pending is not None and pending["status"] == "in_flight":
             pending["status"] = "unknown"
             pending["error_code"] = "interrupted_request"
-        state["status"] = "paused"
+        state["status"] = "stopped"
         state.setdefault("interruption_notes", []).append(
             {
                 "stopped_at": now(),
@@ -576,7 +533,7 @@ def _execute(
         )
         _save(path, state, keys)
         emit(
-            "\nPaused by Ctrl+C. An interrupted request may still be billed by DeepSeek."
+            "\nStopped by Ctrl+C. An interrupted request may still be billed by DeepSeek."
         )
     _summary(state, emit)
     emit("Trial " + state["status"] + ". Saved: " + str(path.resolve()))
@@ -584,7 +541,7 @@ def _execute(
         raise KeyboardInterrupt()
     if state["status"] != "completed":
         raise DialogueError(
-            "The trial is paused. Inspect the saved JSON before resuming."
+            "The trial stopped early. Inspect the saved JSON for details."
         )
     return path
 
@@ -607,7 +564,6 @@ def run_dialogue(
     state = {
         "format_version": FORMAT_VERSION,
         "trial_id": uuid.uuid4().hex,
-        "parent_trial_id": None,
         "created_at": now(),
         "status": "running",
         "settings": {
@@ -616,64 +572,14 @@ def run_dialogue(
             "memory_format": "blended",
             "peer_max_tokens": PEER_LIMIT,
         },
-        "new_message_limit": max_messages,
-        "initial_message_count": 0,
         "target_message_count": max_messages,
         "messages": [],
         "attempts": [],
         "interruption_notes": [],
-        "resume_notes": [],
     }
     api.ensure_no_keys(state, keys)
     path = _reserve(output_dir, state, keys)
-    with _chat_lock(path):
-        return _execute(state, path, keys, emit)
-
-
-def resume_dialogue(
-    chat_id: str,
-    keys_file: Path,
-    output_dir: Path,
-    emit: Callable[[str], None],
-) -> Path:
-    path = _chat_path(chat_id, output_dir)
-    with _chat_lock(path):
-        state = _read_state(path)
-        count = len(state["messages"])
-        if count >= RESUME_TARGET:
-            emit(
-                "Chat already has "
-                + str(count)
-                + " messages; target is 20. No API requests made."
-            )
-            emit("Saved chat: " + str(path.resolve()))
-            return path
-        keys = api.load_keys(keys_file)
-        api.ensure_no_keys(state, keys)
-        previous_status = state.get("status", "unknown")
-        state["status"] = "running"
-        state["resumed_at"] = now()
-        state.setdefault("resume_notes", []).append(
-            {
-                "resumed_at": state["resumed_at"],
-                "after_message_count": count,
-                "after_message_id": (
-                    state["messages"][-1]["message_id"] if state["messages"] else None
-                ),
-                "previous_status": previous_status,
-                "remark": "This chat stopped here at "
-                + str(count)
-                + " accepted messages before continuing toward 20.",
-            }
-        )
-        state["initial_message_count"] = count
-        state["new_message_limit"] = RESUME_TARGET - count
-        state["target_message_count"] = RESUME_TARGET
-        state.setdefault("interruption_notes", [])
-        for attempt in state["attempts"]:
-            if attempt["status"] == "in_flight":
-                attempt["status"] = "unknown"
-                attempt["error_code"] = "previous_process_ended"
+    with _run_lock(path):
         return _execute(state, path, keys, emit)
 
 

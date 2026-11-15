@@ -843,3 +843,89 @@ or prompt-copy directory was created.
   trial pipeline, dependencies, live API calls, push, or deployment. Live behavior
   of the new five-part prompt arrangement remains unmeasured. Lead model/effort,
   all token usage/cost, and exact elapsed time remain unknown.
+
+
+## Remove the dialogue resume pipeline (2026-11-15)
+
+### Scope and recovery
+
+The user requested deletion of the resume-chat pipeline and its old wiring.
+The lead scoped this to fresh dialogue runs and read-only inspection, preserving
+existing saved research records. Shared-research distribution and MIT licensing
+remain unchanged; no third-party implementation was incorporated.
+
+The starting tree and index were clean at `49b69e2`. Work uses the dedicated local
+branch `codex/remove-dialogue-resume`. The initial sandboxed `git switch -c`
+could not write its ref; the same local branch operation succeeded through the
+approval mechanism. Revert this task's commit to restore the previous source and
+documentation. No private inputs, credentials, old logs, or backups were edited
+or removed, and no new private data copies were created.
+
+### Result
+
+- The CLI exposes only `run` and `inspect`. The resume parser, interactive chat-ID
+  prompt, dispatch, engine entry point, ID/path resolver, and fixed continuation
+  target are removed.
+- Fresh runs retain their five input files, Agent A first, selected message limit,
+  blended memory, thinking modes, delivery checks, and detailed JSON snapshots.
+  Legacy request builders and separated-memory rendering used only by resumed
+  runs are removed. V1/V2 record reading and generation-profile compatibility
+  remain for inspection.
+- New records omit continuation-only `parent_trial_id`, `initial_message_count`,
+  `new_message_limit`, and `resume_notes` fields. Usage summaries retain the two
+  agents and whole history; the additional current-trial summary is removed.
+- Early stops now record `stopped` and guide users to inspection or a fresh run.
+  Ctrl+C still saves interruption notes and exits with 130. Provider error text
+  no longer suggests resuming. Prior snapshots keep their original status and
+  metadata, including any historical continuation notes.
+- The shared writer lock remains in use as `_run_lock`, with unchanged exclusive
+  creation, permissions, and cleanup. Atomic saves, collision protection, key
+  loading/redaction, request transport, and response limits retain their behavior.
+  The API module changes only two diagnostic strings. No security controls,
+  tooling, dependencies, formatter configuration, or licensing were changed.
+- Current README and dialogue usage describe the fresh-run/inspect flow. Earlier
+  task-evidence entries remain historical records of the superseded feature.
+
+### Verification and review
+
+- `python3 -m black deepseek_dialogue/cli.py deepseek_dialogue/engine.py deepseek_dialogue/api.py`
+  formatted the three changed modules using existing Black 25.11.0.
+  `python3 -m black --check deepseek_dialogue`: all six modules unchanged, passed.
+- `python3 -m deepseek_dialogue --help`, `python3 -m deepseek_dialogue run --help`,
+  and `python3 -m deepseek_dialogue inspect --help`: all three passed. The top-level
+  command lists only `run` and `inspect`.
+- One-off `python3 -` direct checks compiled all 14 dialogue/rating Python modules
+  with `compile(...)`, without bytecode-cache writes. They confirmed unchanged
+  fresh-run signature/defaults and AST call routing: `_read_state` is called only
+  by `inspect_run`, and `_execute` only by `run_dialogue`.
+- The same direct check invoked `python3 -m deepseek_dialogue resume --help` as a
+  subprocess and asserted the expected usage-error exit 2. As a negative control,
+  the baseline CLI loaded from `git show 49b69e2:deepseek_dialogue/cli.py` still
+  accepted the resume subcommand.
+- Sixteen request payloads matched the baseline dictionaries across both agents,
+  both thinking modes, empty/nonempty initial memory, and empty/nonempty accepted
+  history. State was not mutated; accepted replies occurred exactly once and
+  private reasoning stayed out of context.
+- Eight synthetic snapshots covered V1 and V2 with absent/separated/blended memory
+  metadata in both thinking modes. Reading matched the baseline, and inspection
+  output matched except for the deliberately removed current-trial summary.
+  Snapshot bytes remained unchanged. Credential-loading and provider-call
+  tripwires were never triggered. Four malformed snapshots were rejected.
+- In temporary directories only, a new stopped snapshot without continuation
+  metadata saved and reloaded; file permissions were 0600, existing run-file
+  collisions were rejected without overwriting, nested writer locks were rejected,
+  and Ctrl+C removed the lock while preserving the JSON bytes.
+- Current README/dialogue/deliberation local links resolve. Diffs for ratings,
+  dialogue input loading, dependencies, ignore rules, and license are empty.
+  `git diff --check` passed.
+- Independent `gpt-6.1-sol` / `xhigh` read-only review found no actionable
+  regressions, incomplete cleanup, or approval-boundary issues. The initial
+  read-only inventory used `gpt-6-luna` / `high`; the lead checked its findings
+  and retained the shared writer lock it identified. No reviewer implemented
+  changes. Lead model/effort, total elapsed time, and all usage/cost are unknown;
+  no routing comparison or savings claim is made.
+- Automated test-suite cases collected/executed: zero, following the existing
+  no-test-pipeline project requirement. The direct checks above passed; they did
+  not execute a dialogue trial or simulated model runner. No live API request,
+  dependency installation, push, PR, or deployment occurred. Full fresh-run
+  execution and provider compatibility were not exercised in this task.

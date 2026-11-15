@@ -25,12 +25,8 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
         "--max-messages",
         type=positive_int,
         default=20,
-        help="number of NEW accepted messages to generate (default: 20)",
+        help="number of accepted messages to generate (default: 20)",
     )
-    _add_storage_options(parser)
-
-
-def _add_storage_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--keys-file",
         type=Path,
@@ -48,7 +44,7 @@ def _add_storage_options(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="deepseek_dialogue",
-        description="Run and inspect a saved DeepSeek dialogue. Agent A always starts.",
+        description="Start a new DeepSeek dialogue or inspect a saved run. Agent A always starts.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -77,16 +73,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_run_options(run)
 
-    resume = commands.add_parser(
-        "resume", help="continue a saved chat to 20 total accepted messages"
-    )
-    resume.add_argument(
-        "chat_id",
-        nargs="?",
-        help="chat/trial ID or saved JSON path (prompted when omitted)",
-    )
-    _add_storage_options(resume)
-
     inspect = commands.add_parser("inspect", help="read a saved run without API calls")
     inspect.add_argument("run_path", type=Path)
     inspect.add_argument(
@@ -108,22 +94,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 emit=print,
                 thinking=args.thinking,
             )
-        elif args.command == "resume":
-            chat_id = args.chat_id
-            if chat_id is None:
-                try:
-                    chat_id = input("Chat ID: ")
-                except EOFError:
-                    raise DialogueError("No chat ID supplied.") from None
-            chat_id = chat_id.strip()
-            if not chat_id:
-                raise DialogueError("Chat ID cannot be empty.")
-            engine.resume_dialogue(
-                chat_id=chat_id,
-                keys_file=args.keys_file,
-                output_dir=args.output_dir,
-                emit=print,
-            )
         else:
             engine.inspect_run(
                 run_path=args.run_path,
@@ -131,7 +101,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 emit=print,
             )
     except KeyboardInterrupt:
-        print("Interrupted. Inspect the saved run before resuming.", file=sys.stderr)
+        print(
+            "Interrupted. Inspect the saved run for recorded progress.", file=sys.stderr
+        )
         return 130
     except DialogueError as exc:
         print("Error: {}".format(exc), file=sys.stderr)

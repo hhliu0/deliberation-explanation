@@ -65,7 +65,7 @@ inputs: create the two directories and their five files using the formats below.
 All five files are required. Only `memory.txt` may be blank. No template tokens
 are replaced and no input text is truncated or automatically summarized. Files
 are snapshotted into the run log; editing them affects subsequent new runs, not
-the running or resumed conversation.
+the running conversation.
 
 Use this model configuration for thinking enabled:
 
@@ -121,7 +121,7 @@ Accepted delivered
 messages have a hard 512-token limit, determined from reported completion tokens
 minus reported reasoning tokens. The response must finish normally and include
 nonblank text and valid usage counts. An over-limit, truncated, malformed, or
-failed response pauses the run; it is recorded and is never forwarded to the
+failed response stops the run; it is recorded and is never forwarded to the
 other agent. There are no automatic retries. Reasoning and usage records are
 saved locally and never added to either agent's conversation context.
 
@@ -129,26 +129,14 @@ saved locally and never added to either agent's conversation context.
 
 Starting a run defaults to **20 accepted messages**; `run --max-messages` can
 choose another positive count, such as the four-message handshake above.
-Resuming always targets **20 total accepted messages**, including saved history.
-For example, resuming a chat with four accepted messages generates up to 16 more.
-Resume has no `--max-messages` option. It preserves all five snapshotted inputs,
-effective model settings, accepted history, and next speaker. It does not reread
-the original input files or import any other run's memory.
-
-The saved `trial_id` is the chat ID. Resume continues that same ID and updates
-the same JSON file in place; it does not create another ID or trial file. Enter
-the same ID again to resume after another interruption. Existing saved JSON
-paths also work. If the chat already has at least 20 accepted messages, resume
-prints its current path without making API calls or modifying the JSON record.
+Every invocation starts a fresh conversation from the current input files, with
+a new `trial_id` and JSON log. Saved runs are available for read-only inspection.
+The resume command has been removed; stopped and completed runs cannot be
+continued in place.
 
 ```sh
 python3 -m deepseek_dialogue inspect runs/dialogue/TRIAL_ID.json
 python3 -m deepseek_dialogue inspect runs/dialogue/TRIAL_ID.json --show-thinking
-python3 -m deepseek_dialogue resume
-# Enter the chat ID at the "Chat ID:" prompt.
-python3 -m deepseek_dialogue resume CHAT_ID
-# Legacy saved paths also work:
-python3 -m deepseek_dialogue resume runs/dialogue/TRIAL_ID.json
 ```
 
 Inspection is local and does not make API calls. Thinking is hidden during normal
@@ -176,48 +164,37 @@ runs/dialogue/TRIAL_ID.json
 Original input files are never overwritten. The JSON log stores the exact input
 text and accepted turns and is the only persistent record of growing memory.
 No separate memory text files, input copies, or input archives are generated.
-Resume rebuilds memory from this log; a new run reads only the current editable
-inputs and never automatically imports another run's history. To supply prior
+A new run reads only the current editable inputs and never automatically imports
+another run's history. To supply prior
 material deliberately, edit that agent's input `memory.txt` before the new run.
 
-Existing version-1 runs remain inspectable and resumable using their original
-complete prompts and named assistant messages. Starting a new run uses the five
-files above. Superseded prompt files were removed from the working tree; earlier
-private prompt contents remain in their existing detailed run logs, while prior
-tracked source prompts are recoverable through Git history.
-
-Earlier version-2 logs without `settings.memory_format` retain their original
-`Initial memory` / `Dialogue so far` headings on resume. New runs save
-`memory_format: blended`. Saved prompt text is preserved in both cases.
+Existing version-1 and version-2 runs remain inspectable. Their saved prompts,
+history, and metadata are preserved. Starting a new run uses the five files above
+and saves `memory_format: blended`. Superseded prompt files were removed from the
+working tree; earlier private prompt contents remain in their existing detailed
+run logs, while prior tracked source prompts are recoverable through Git history.
 
 The default output directory is `runs/dialogue/`. The retained research chats
 are grouped in its `deliberation/` and `deliberation-no-thinking/` subdirectories;
-pass their JSON paths to `inspect` or `resume`, or use the matching `--output-dir`
-when resolving a chat ID. Historical bird/egg runs are in `runs/backups/dialogue/`.
+pass their JSON paths to `inspect`. Historical bird/egg runs are in
+`runs/backups/dialogue/`.
 
 Override storage or credential file paths with `--output-dir` and `--keys-file`
-on `run` or `resume`. Resume looks up an entered ID in `--output-dir`; when given
-a JSON path, it updates that file directly. Custom output directories outside
+on `run`. Custom output directories outside
 `runs/` are not automatically ignored by Git; keep private artifacts out of
 commits. The default ignore rules cover the standard logs in `runs/`.
 
-An adjacent `.json.lock` file prevents concurrent commands from editing the same
-chat. Normal exits, errors, and Ctrl+C remove it. Abrupt termination can leave a
-stale lock; check its recorded process ID and confirm that process has exited
-before deleting the lock and resuming.
+An adjacent `.json.lock` file guards the active run against concurrent writers.
+Normal exits, errors, and Ctrl+C remove it. Abrupt termination can leave a stale
+lock beside the record; read-only inspection is still available.
 
-Normal completion exits with status `0`; a paused run or error exits with `1`;
+Normal completion exits with status `0`; an early stop or error exits with `1`;
 Ctrl+C saves progress and exits with `130`. The JSON record also retains a local
 `interruption_notes` entry marking where the chat stopped, including the time,
-accepted message count, message IDs, and a remark. These notes persist across
-resumes and are never sent to either agent. A resumed chat continues until it
-reaches 20 accepted messages or you press Ctrl+C; a rejected response or provider
-error also pauses safely. Inspect the saved record before resuming a paused run.
-
-Each continuation also appends a local `resume_notes` entry with the previous
-status, the point at which the conversation had stopped, and the resumption time.
-This preserves earlier boundaries such as a four-message handshake, even after
-the same chat reaches 20 messages. These remarks also stay out of model context.
+accepted message count, message IDs, and a remark. These notes are never sent to
+either agent. New runs record `status: stopped` after Ctrl+C, a rejected response,
+or a provider error. Inspect the saved record for progress and diagnostics; use
+`run` when ready to start a fresh conversation.
 
 Prompts and accepted dialogue are sent to DeepSeek. Saved run records contain
 the prompts, dialogue, reasoning, and usage, so treat them as private research
