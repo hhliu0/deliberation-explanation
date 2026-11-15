@@ -1040,3 +1040,81 @@ modified, moved, or removed.
   Direct checks above passed; no simulated model runner, live API calls, tooling
   installation, push, PR, or deployment. Full dialogue execution against the
   provider was not exercised in this task.
+
+
+## Separate dialogue persistence and terminal reporting (2026-11-15)
+
+### Scope, approval, and recovery
+
+The user requested separate files for JSON logging and terminal summaries,
+leaving the engine focused on dialogue execution with unchanged behavior.
+Shared-research use and MIT licensing remain unchanged; no external source was
+incorporated. Baseline and index were clean at `4647634`; work uses the local
+branch `codex/split-dialogue-output`. Reverting this task's commit restores the
+previous module layout. No private inputs, credentials, or existing run records
+were read or changed.
+
+Because the JSON helpers contain credential checks and file-access safeguards,
+the lead presented the exact relocation, affected modules, import/caller risk,
+verification, and rollback under the user's AGENTS.md approval boundary. The user
+explicitly answered **"Approve the unchanged relocation"** for moving `now`,
+`_save`, `_reserve`, and `_run_lock` to `records.py` and updating callers, with
+unchanged credential scans, 0600/0700 permissions, exclusive creation, atomic
+writes, and cleanup. That approval was received before relocating those helpers.
+
+### Result
+
+- `records.py` owns `now`, `save`, `reserve`, and `run_lock`, with the existing
+  persistence implementations and diagnostics. Engine calls are qualified through
+  this module; the moved underscore-prefixed functions have module-level names.
+- `reporting.py` owns `usage_text`, its nested `count`, and `summary`. The engine
+  supplies its existing agent order and labels to `summary`, preserving output
+  without duplicating execution constants or importing the engine back.
+- `usage.py` owns `is_integer`, `normalize`, and `delivery_bound`, sharing the
+  existing accounting rules between response validation and terminal reporting.
+- `engine.py` retains input/run setup, response validation, memory/request
+  construction, and the alternating execution loop. CLI arguments, JSON fields,
+  timestamps, message/usage text, errors, delivery limits, and safeguards retain
+  their behavior. All 30 dialogue functions/methods/nested helpers have docstrings.
+  The dialogue guide now records the module responsibilities.
+
+### Verification and review
+
+- `python3 -m black deepseek_dialogue/engine.py deepseek_dialogue/records.py deepseek_dialogue/reporting.py deepseek_dialogue/usage.py`:
+  all four files unchanged. `python3 -m black --check deepseek_dialogue`: all nine
+  modules unchanged, using existing Black 25.11.0.
+- One-off `python3 -` AST comparison checked all 16 original top-level engine
+  functions against `git show 4647634:deepseek_dialogue/engine.py`, accounting only
+  for relocation/renaming and the explicitly supplied summary arguments. All
+  matched, including persistence/locking bodies, execution ordering, diagnostics,
+  and state construction. Execution constants also matched. The first comparison
+  over-normalized the local `agents` variable in `run_dialogue`; restricting that
+  normalization to `summary` corrected the checker, with no source change needed.
+- The same check compiled all 17 dialogue/rating modules without bytecode writes,
+  confirmed 30/30 dialogue definitions have remarks, and successfully imported
+  each of `records`, `reporting`, `usage`, and `engine` in four isolated processes.
+  `python3 -m deepseek_dialogue --help` and `python3 -m deepseek_dialogue run --help`
+  passed; the removed `inspect` and `resume` subcommands still returned exit 2.
+- A second one-off `python3 -` direct comparison matched eight integer cases,
+  twelve usage-normalization/display cases, and 36 delivery-bound cases against
+  baseline. Five terminal summaries matched exactly, covering empty history,
+  cache accounting, partial counts, and unknown attempts. Twenty accepted/rejected
+  response cases matched across both thinking modes. Eight mixed-thinking payloads
+  matched with empty/nonempty initial memory and accepted history.
+- Temporary-file checks compared baseline and new JSON bytes with fixed timestamps
+  for running, stopped, and completed records. Full response/reasoning/accounting
+  content and Unicode text were retained. File/directory modes remained 0600/0700;
+  collision errors, credential rejection, failed-replace cleanup, lock exclusion,
+  lock PID/0600 mode, and normal/Ctrl+C lock cleanup matched. Existing snapshots
+  survived rejected writes and simulated replacement failures unchanged.
+- API, input loader, CLI, ratings, dependencies, ignore rules, and license diffs
+  are empty. `git diff --check` passed. No inspection/resume pipeline was added.
+- Independent `gpt-6-astra` / `high` read-only review found no actionable findings
+  or blockers, independently checking all 16 relocated/retained function bodies,
+  imports, callers, safeguards, and outputs. Initial dependency inventory used
+  `gpt-6-luna` / `high`; the lead verified its findings. Lead model/effort, all
+  usage/cost, and exact elapsed time are unknown; no routing comparison is made.
+- Automated test-suite cases: zero, following the existing project requirement.
+  Direct checks above passed. No simulated dialogue runner, live API request,
+  installation, push, PR, or deployment occurred. Full live dialogue execution
+  was not exercised during this structural refactor.

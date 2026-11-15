@@ -1,16 +1,11 @@
-"""Dialogue scheduling, strict delivery limits, and local run records."""
+"""Dialogue setup, request construction, response validation, and turn scheduling."""
 
 import copy
-import json
-import os
-import tempfile
 import uuid
-from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from . import api, inputs
+from . import api, inputs, records, reporting, usage
 from .api import DialogueError
 from .inputs import GENERATION
 
@@ -20,73 +15,10 @@ PEER_LIMIT = 512
 FORMAT_VERSION = 2
 
 
-def now() -> str:
-    """Return the current UTC time as an ISO 8601 timestamp."""
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _integer(value: Any) -> bool:
-    """Check for a nonnegative integer, excluding booleans."""
-    return type(value) is int and value >= 0
-
-
 def _check_limit(value: int) -> None:
     """Reject message limits that are not positive integers."""
-    if not _integer(value) or value == 0:
+    if not usage.is_integer(value) or value == 0:
         raise DialogueError("The message limit must be a positive integer.")
-
-
-def _usage(raw: Any) -> Dict[str, Any]:
-    """Keep only known numeric accounting fields, entirely outside prompts."""
-    if not isinstance(raw, dict):
-        return {}
-    result = {}
-    for key in (
-        "prompt_tokens",
-        "completion_tokens",
-        "total_tokens",
-        "prompt_cache_hit_tokens",
-        "prompt_cache_miss_tokens",
-    ):
-        if _integer(raw.get(key)):
-            result[key] = raw[key]
-    for group, fields in (
-        ("completion_tokens_details", ("reasoning_tokens", "safety_tokens")),
-        ("prompt_tokens_details", ("cached_tokens",)),
-    ):
-        details = raw.get(group)
-        if isinstance(details, dict):
-            result[group] = {
-                field: details[field]
-                for field in fields
-                if _integer(details.get(field))
-            }
-    return result
-
-
-def _delivery_bound(
-    usage: Dict[str, Any], generation: Optional[Dict[str, Any]] = None
-) -> Optional[int]:
-    """Return the non-reasoning token bound, or None for invalid usage."""
-    generation = GENERATION if generation is None else generation
-    usage = _usage(usage)
-    prompt = usage.get("prompt_tokens")
-    completion = usage.get("completion_tokens")
-    total = usage.get("total_tokens")
-    details = usage.get("completion_tokens_details", {})
-    reasoning = details.get("reasoning_tokens") if isinstance(details, dict) else None
-    disabled = generation["thinking"]["type"] == "disabled"
-    if reasoning is None and disabled:
-        reasoning = 0
-    if not all(_integer(n) for n in (prompt, completion, total, reasoning)):
-        return None
-    if disabled and reasoning != 0:
-        return None
-    if reasoning > completion or completion > generation["max_tokens"]:
-        return None
-    if total != prompt + completion:
-        return None
-    return completion - reasoning
 
 
 def _response(
@@ -133,7 +65,7 @@ def _response(
         return record, "empty_final_message"
     if generation["thinking"]["type"] == "disabled" and record.get("reasoning_content"):
         return record, "unexpected_reasoning_content"
-    bound = _delivery_bound(record["usage"], generation)
+    bound = usage.delivery_bound(record["usage"], generation)
     if bound is None:
         return record, "missing_or_inconsistent_usage"
     record["non_reasoning_token_bound"] = bound
@@ -184,142 +116,6 @@ def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
     }
 
 
-def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
-    """Timestamp and check the state for credentials, then atomically save its JSON."""
-    state["updated_at"] = now()
-    api.ensure_no_keys(state, keys)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix=".dialogue-",
-            delete=False,
-        ) as stream:
-            temporary = Path(stream.name)
-            json.dump(state, stream, ensure_ascii=False, indent=2)
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(str(temporary), str(path))
-    except OSError:
-        raise DialogueError(
-            "Cannot save the run. No further requests will be made; retain the last saved snapshot."
-        ) from None
-    finally:
-        if temporary is not None and temporary.exists():
-            temporary.unlink()
-
-
-def _reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> Path:
-    """Create a new owner-only run file and save its initial snapshot."""
-    api.ensure_no_keys(str(output_dir), keys)
-    try:
-        output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        path = output_dir / (state["trial_id"] + ".json")
-        descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        os.close(descriptor)
-    except OSError:
-        raise DialogueError(
-            "Cannot create a new run file in the output directory."
-        ) from None
-    _save(path, state, keys)
-    return path
-
-
-@contextmanager
-def _run_lock(path: Path):
-    """Prevent concurrent writers from overwriting the same run."""
-    lock = path.with_suffix(path.suffix + ".lock")
-    try:
-        descriptor = os.open(str(lock), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        raise DialogueError("This run is locked by another command.") from None
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            stream.write(str(os.getpid()) + "\n")
-        yield
-    finally:
-        try:
-            lock.unlink()
-        except FileNotFoundError:
-            pass
-
-
-def _usage_text(usage: Dict[str, Any]) -> str:
-    """Format one response's token usage for local display."""
-    usage = _usage(usage)
-
-    def count(value: Any) -> str:
-        """Format a valid token count, or mark it as unknown."""
-        return str(value) if _integer(value) else "unknown"
-
-    reasoning = usage.get("completion_tokens_details", {}).get("reasoning_tokens")
-    text = (
-        "Usage (local): input="
-        + count(usage.get("prompt_tokens"))
-        + ", output="
-        + count(usage.get("completion_tokens"))
-        + ", thinking="
-        + count(reasoning)
-        + ", total="
-        + count(usage.get("total_tokens"))
-    )
-    for key, label in (
-        ("prompt_cache_hit_tokens", "cache hit"),
-        ("prompt_cache_miss_tokens", "cache miss"),
-    ):
-        if key in usage:
-            text += ", " + label + "=" + count(usage[key])
-    bound = _delivery_bound(usage)
-    if bound is not None:
-        text += ", non-reasoning bound=" + str(bound)
-    return text
-
-
-def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
-    """Display token totals per agent and across all attempts, noting missing counts."""
-    fields = (
-        "prompt_tokens",
-        "completion_tokens",
-        "reasoning_tokens",
-        "total_tokens",
-        "prompt_cache_hit_tokens",
-        "prompt_cache_miss_tokens",
-    )
-    for agent in (*AGENTS, "all"):
-        attempts = [
-            a for a in state["attempts"] if agent == "all" or a["agent"] == agent
-        ]
-        labels = ("input", "output", "thinking", "total", "cache hit", "cache miss")
-        chunks = []
-        for field, label in zip(fields, labels):
-            known = []
-            for attempt in attempts:
-                usage = _usage(attempt.get("response", {}).get("usage"))
-                value = (
-                    usage.get("completion_tokens_details", {}).get(field)
-                    if field == "reasoning_tokens"
-                    else usage.get(field)
-                )
-                if _integer(value):
-                    known.append(value)
-            missing = len(attempts) - len(known)
-            value_text = str(sum(known)) if known or not attempts else "unknown"
-            if missing and known:
-                value_text += " (+ " + str(missing) + " unknown requests)"
-            chunks.append(label + "=" + value_text)
-        label = "Whole history" if agent == "all" else LABELS[agent]
-        emit(
-            label
-            + " totals (local, "
-            + str(len(attempts))
-            + " requests): "
-            + ", ".join(chunks)
-        )
-
-
 def _execute(
     state: Dict[str, Any], path: Path, keys: Dict[str, str], emit: Callable[[str], None]
 ) -> Path:
@@ -327,7 +123,7 @@ def _execute(
     pending = None
     interrupted = False
     try:
-        _save(path, state, keys)
+        records.save(path, state, keys)
         emit("Chat ID: " + state["trial_id"])
         emit("Saved trial: " + str(path.resolve()))
         emit(
@@ -343,29 +139,29 @@ def _execute(
                 "message_id": uuid.uuid4().hex,
                 "trial_id": state["trial_id"],
                 "agent": agent,
-                "started_at": now(),
+                "started_at": records.now(),
                 "status": "in_flight",
             }
             state["attempts"].append(pending)
-            _save(path, state, keys)
+            records.save(path, state, keys)
             emit(LABELS[agent] + " is thinking...")
             try:
                 raw = api.complete(_payload(state, agent), keys[agent])
                 api.ensure_no_keys(raw, keys)
                 record, failure = _response(raw, _generation(state, agent))
                 pending["response"] = record
-                pending["finished_at"] = now()
+                pending["finished_at"] = records.now()
                 if failure:
                     pending["status"] = "rejected"
                     pending["error_code"] = failure
                     state["status"] = "stopped"
-                    _save(path, state, keys)
+                    records.save(path, state, keys)
                     emit(
                         "Stopped: "
                         + failure
                         + ". No message was delivered to the counterpart."
                     )
-                    emit(_usage_text(record["usage"]))
+                    emit(reporting.usage_text(record["usage"]))
                     break
                 pending["status"] = "accepted"
                 state["messages"].append(
@@ -375,9 +171,9 @@ def _execute(
                         "message_id": pending["message_id"],
                     }
                 )
-                _save(path, state, keys)
+                records.save(path, state, keys)
                 emit("\n" + LABELS[agent] + ":\n" + record["content"])
-                emit(_usage_text(record["usage"]))
+                emit(reporting.usage_text(record["usage"]))
                 emit(
                     "Words (local): message="
                     + str(record["word_counts"]["message"])
@@ -395,9 +191,9 @@ def _execute(
             except api.APIError as error:
                 pending["status"] = "unknown" if error.uncertain else "error"
                 pending["error_code"] = error.code
-                pending["finished_at"] = now()
+                pending["finished_at"] = records.now()
                 state["status"] = "stopped"
-                _save(path, state, keys)
+                records.save(path, state, keys)
                 emit("Stopped: " + str(error))
                 break
             except DialogueError:
@@ -406,11 +202,11 @@ def _execute(
                     pending["status"] = "error"
                     pending["error_code"] = "credential_in_response"
                     state["status"] = "stopped"
-                    _save(path, state, keys)
+                    records.save(path, state, keys)
                 raise
         else:
             state["status"] = "completed"
-            _save(path, state, keys)
+            records.save(path, state, keys)
     except KeyboardInterrupt:
         interrupted = True
         if (
@@ -429,7 +225,7 @@ def _execute(
         state["status"] = "stopped"
         state.setdefault("interruption_notes", []).append(
             {
-                "stopped_at": now(),
+                "stopped_at": records.now(),
                 "after_message_count": len(state["messages"]),
                 "after_message_id": (
                     state["messages"][-1]["message_id"] if state["messages"] else None
@@ -444,11 +240,11 @@ def _execute(
                 + " accepted messages.",
             }
         )
-        _save(path, state, keys)
+        records.save(path, state, keys)
         emit(
             "\nStopped by Ctrl+C. An interrupted request may still be billed by DeepSeek."
         )
-    _summary(state, emit)
+    reporting.summary(state, emit, AGENTS, LABELS)
     emit("Trial " + state["status"] + ". Saved: " + str(path.resolve()))
     if interrupted:
         raise KeyboardInterrupt()
@@ -478,7 +274,7 @@ def run_dialogue(
     state = {
         "format_version": FORMAT_VERSION,
         "trial_id": uuid.uuid4().hex,
-        "created_at": now(),
+        "created_at": records.now(),
         "status": "running",
         "settings": {
             "agents": agents,
@@ -492,6 +288,6 @@ def run_dialogue(
         "interruption_notes": [],
     }
     api.ensure_no_keys(state, keys)
-    path = _reserve(output_dir, state, keys)
-    with _run_lock(path):
+    path = records.reserve(output_dir, state, keys)
+    with records.run_lock(path):
         return _execute(state, path, keys, emit)

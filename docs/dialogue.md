@@ -198,6 +198,15 @@ files in the ignored `prompts/Agent A/` and `prompts/Agent B/` directories.
 
 ## Development and licensing
 
+The dialogue implementation separates execution from its outputs:
+
+| Module | Responsibility |
+| --- | --- |
+| `engine.py` | Set up runs, build requests, validate responses, and alternate agent turns. |
+| `records.py` | Generate timestamps, reserve and lock run files, and save JSON snapshots. |
+| `reporting.py` | Format per-response token usage and emit terminal summaries. |
+| `usage.py` | Share token-accounting checks between response validation and terminal reporting. |
+
 This project intentionally includes no automated tests, test pipeline, or CI.
 Local syntax and formatting checks do not establish compatibility with the live
 API.
