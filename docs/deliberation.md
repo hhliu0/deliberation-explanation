@@ -56,7 +56,7 @@ never automatically load an earlier run's history.
 The two input directories are already ignored by Git. Start a discussion with:
 
 ```sh
-python3 -m deepseek_dialogue run --max-messages 6
+python3 -m deepseek_dialogue run --trial-name "deliberation" --max-messages 6
 ```
 
 Six alternating messages provide three contributions per agent for an initial

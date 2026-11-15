@@ -6,6 +6,7 @@ __pycache__/
 keys.local.env
 *.local.env
 runs/
+/Dialogue Archive/
 *.local.txt
 Individual research note.docx
 .venv/

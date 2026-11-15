@@ -1118,3 +1118,90 @@ writes, and cleanup. That approval was received before relocating those helpers.
   Direct checks above passed. No simulated dialogue runner, live API request,
   installation, push, PR, or deployment occurred. Full live dialogue execution
   was not exercised during this structural refactor.
+
+
+## Ordered minimal dialogue JSON and Dialogue Archive (2026-11-15)
+
+### Scope and recovery
+
+The user requested JSON containing only trial ID/start/end times, a new CLI trial
+name, speaker/message/thinking with token counts, and Agent A/B's original five
+input texts, in that exact order. They confirmed accepted turns with full text
+and both counts after the lead explained that the existing message-token count
+is a conservative completion-minus-reasoning bound. Later steering explicitly
+requested creating and using the project folder `Dialogue Archive` immediately.
+
+The starting tree/index were clean at `ad39014`. Work uses the local branch
+`codex/dialogue-json-schema`. Code/docs can be reverted to that baseline; retain
+the new archive's Git exclusion and preserve any generated private JSON during
+rollback. The created folder can be removed only if still empty. No existing
+logs or private input/credential files were read, rewritten, or moved. Research
+sharing and MIT licensing remain unchanged; no external source was reused.
+
+### Result
+
+- `run` requires `--trial-name NAME`. Blank or non-string names are rejected
+  before input/credential loading; valid supplied text is saved unchanged.
+- Each save projects the in-memory state to exactly these ordered keys:
+  `trial_id`, `started_at`, `ended_at`, `trial_name`, `messages`, `agent_a_inputs`,
+  `agent_b_inputs`. Every accepted turn contains exactly `speaker`, `message`,
+  `thinking`, `message_token_count`, `thinking_token_count`, in that order.
+- Input objects preserve `model-config.txt`, `persona.txt`, `memory.txt`,
+  `statements.txt`, and `starting-prompt.txt` in order, as their original loaded
+  text. Model configuration remains raw text; effective CLI overrides are not
+  added to it. Each agent's original memory is preserved separately from turns.
+- Accepted response records supply the full message/reasoning and validated
+  token bound; reasoning count is completion tokens minus that bound. Missing
+  disabled-thinking counts yield zero. Missing reasoning text is `null`, while
+  returned empty text remains an empty string. Rejected attempts and all other
+  runtime metadata, raw usage, word counts, and totals are omitted from disk.
+- Start time comes from initial state creation. End time is `null` while running
+  and set once on the first completed/stopped save. Existing execution paths
+  cover normal completion, response rejection, API/credential errors, and handled
+  Ctrl+C. Abrupt termination, a pre-execution lock failure, or a failed final
+  save can leave a null end time; no unlocked write or extra retry was introduced.
+- Created `Dialogue Archive/` with 0700 permissions. New files default directly
+  to `Dialogue Archive/TRIAL_ID.json`, with no per-trial subfolder or separate
+  full-state log. `--output-dir` remains available. `/Dialogue Archive/` was added
+  to `.gitignore` to retain the existing exclusion of private generated records.
+- Whole-state credential scanning, atomic writes, permissions, exclusive file
+  creation, and locks remain intact. Execution, input loading, response validation,
+  accounting, and terminal summaries retain their behavior. Current README and
+  dialogue/deliberation guides document the name argument, archive, and schema.
+
+### Verification and review
+
+- `python3 -m black deepseek_dialogue/cli.py deepseek_dialogue/engine.py deepseek_dialogue/records.py`:
+  all three unchanged; `python3 -m black --check deepseek_dialogue`: all nine
+  unchanged. Existing Black 25.11.0 was used; `git diff --check` passed.
+- One-off `python3 -` checks compiled all 17 dialogue/rating modules without
+  bytecode writes and confirmed remarks on all 31 dialogue definitions. Six
+  execution/validation helpers and `now`, `reserve`, and `run_lock` matched
+  baseline ASTs exactly.
+- CLI checks passed for two help invocations and four expected exit-2 cases:
+  missing trial name, missing name value, and removed inspect/resume commands.
+  Four invalid names were rejected before input/key/provider access; CLI blank
+  name returned exit 1. A valid Unicode name retained its exact supplied text.
+- Six synthetic states passed exact top-level, per-turn, and input-file field
+  order; accepted-only selection; complete text/count mapping; absence versus
+  empty reasoning; unchanged input snapshots; and no projection mutation. The
+  baseline full-state layout failed the new exact-key contract as a negative
+  control. Rejected text, error/unknown/in-flight attempts, and extra fields were
+  excluded.
+- Temporary-file checks covered three initial statuses and two running-to-final
+  transitions, stable end times on repeated saves, on-disk field order, 0600/0700
+  permissions, collisions, locks, and failed replacement cleanup. Whole-state
+  credential checks rejected fake credentials in both the saved trial name and
+  an otherwise excluded field, leaving prior JSON bytes unchanged.
+- A focused `python3 -` check verified the actual archive exists at mode 0700,
+  default direct destination, custom output override, ignored archive/old-run
+  paths, named current command examples, and local documentation links.
+- Independent `gpt-6-astra` / `high` read-only review found no actionable findings
+  or blockers, including a final archive/documentation pass. Initial lifecycle
+  audit used `gpt-6-luna` / `high`; the lead verified its findings. Lead
+  model/effort, total elapsed time, and all usage/cost are unknown; no routing
+  comparison or savings claim is made.
+- Automated test-suite cases: zero, following the existing project requirement.
+  Direct checks above passed; no simulated dialogue runner, live API request,
+  installation, push, PR, or deployment occurred. Live dialogue execution was
+  not exercised, and no sample trial was placed in the user's new archive.

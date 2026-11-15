@@ -21,7 +21,13 @@ def positive_int(value: str) -> int:
 
 
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
-    """Add message-limit, credential-file, and output-directory options."""
+    """Add the trial name, message limit, credential file, and output directory."""
+    parser.add_argument(
+        "--trial-name",
+        required=True,
+        metavar="NAME",
+        help="name to include in this trial's JSON log",
+    )
     parser.add_argument(
         "--max-messages",
         type=positive_int,
@@ -37,8 +43,8 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("runs/dialogue"),
-        help="directory for saved dialogue runs (default: runs/dialogue)",
+        default=Path("Dialogue Archive"),
+        help="directory for saved dialogue runs (default: Dialogue Archive)",
     )
 
 
@@ -89,6 +95,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             keys_file=args.keys_file,
             output_dir=args.output_dir,
             emit=print,
+            trial_name=args.trial_name,
             thinking=args.thinking,
         )
     except KeyboardInterrupt:

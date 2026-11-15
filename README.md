@@ -34,15 +34,15 @@ prompt. Those are the only two folders under `prompts/`, with one current copy
 of each file per agent. Agent A is currently The Skeptic; Agent B is The Extrapolator.
 
 ```sh
-python3 -m deepseek_dialogue run --max-messages 4
+python3 -m deepseek_dialogue run --trial-name "handshake" --max-messages 4
 ```
 
 Each run reads those files afresh. Accepted replies extend memory in the detailed
 run log; the program does not overwrite the input files or generate separate
-memory text archives. The
+memory text archives. `--trial-name` is required and is saved in the JSON log. The
 [deliberation guide](docs/deliberation.md) explains the discussion design;
 [dialogue usage](docs/dialogue.md) covers starting chats, JSON logs, and terminal summaries.
-Dialogue output defaults to `runs/dialogue/`; rating output defaults to
+New dialogue JSON files are saved directly in `Dialogue Archive/`; rating output defaults to
 `runs/ratings/`.
 
 ## Project layout
@@ -52,6 +52,7 @@ inputs/                              user YAML inputs; unchanged by cleanup
 prompts/
   Agent A/                           five editable inputs for Agent A
   Agent B/                           five editable inputs for Agent B
+Dialogue Archive/                    new dialogue JSON logs
 runs/
   dialogue/
     deliberation/                    retained twenty-message conversation

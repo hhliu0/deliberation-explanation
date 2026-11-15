@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 from . import api
 from .api import DialogueError
+from .inputs import FILES
 
 
 def now() -> str:
@@ -17,10 +18,52 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def snapshot(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Select the ordered trial details, accepted turns, and original input texts."""
+    responses = {
+        attempt["message_id"]: attempt["response"]
+        for attempt in state["attempts"]
+        if attempt["status"] == "accepted"
+    }
+    messages = []
+    for message in state["messages"]:
+        response = responses[message["message_id"]]
+        message_tokens = response["non_reasoning_token_bound"]
+        messages.append(
+            {
+                "speaker": message["sender"],
+                "message": message["content"],
+                "thinking": response.get("reasoning_content"),
+                "message_token_count": message_tokens,
+                "thinking_token_count": response["usage"]["completion_tokens"]
+                - message_tokens,
+            }
+        )
+    agents = state["settings"]["agents"]
+    return {
+        "trial_id": state["trial_id"],
+        "started_at": state["created_at"],
+        "ended_at": state["ended_at"],
+        "trial_name": state["trial_name"],
+        "messages": messages,
+        "agent_a_inputs": {
+            filename: agents["agent_a"]["inputs"][part]
+            for part, filename in FILES.items()
+        },
+        "agent_b_inputs": {
+            filename: agents["agent_b"]["inputs"][part]
+            for part, filename in FILES.items()
+        },
+    }
+
+
 def save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
-    """Timestamp and check the state for credentials, then atomically save its JSON."""
+    """Timestamp and check the state, then atomically save the selected JSON fields."""
     state["updated_at"] = now()
+    if state["status"] in ("completed", "stopped") and state["ended_at"] is None:
+        state["ended_at"] = state["updated_at"]
     api.ensure_no_keys(state, keys)
+    data = snapshot(state)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -31,7 +74,7 @@ def save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
             delete=False,
         ) as stream:
             temporary = Path(stream.name)
-            json.dump(state, stream, ensure_ascii=False, indent=2)
+            json.dump(data, stream, ensure_ascii=False, indent=2)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())

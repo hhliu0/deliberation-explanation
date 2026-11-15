@@ -27,7 +27,7 @@ has owner-only permissions; keep those permissions if you replace it.
 Start with a four-message handshake to check the live provider interface:
 
 ```sh
-python3 -m deepseek_dialogue run --max-messages 4
+python3 -m deepseek_dialogue run --trial-name "handshake" --max-messages 4
 ```
 
 A four-message live handshake using the earlier complete-prompt format was
@@ -55,7 +55,7 @@ files use The Skeptic for Agent A, The Extrapolator for Agent B, twelve statemen
 and the existing first-run ratings as memory.
 
 ```sh
-python3 -m deepseek_dialogue run
+python3 -m deepseek_dialogue run --trial-name "deliberation"
 ```
 
 The optional `--agent-a DIR` and `--agent-b DIR` path overrides remain available;
@@ -93,7 +93,8 @@ supported generation profiles; duplicate or extra configuration keys and other
 profiles are rejected before any request. `--thinking enabled|disabled` overrides
 both agents' profiles for that invocation without modifying their files. Without
 the flag, each agent uses its file's profile. The raw file text and the effective
-configuration, including any override, are recorded separately.
+configuration are held separately during execution. The JSON log saves the
+original file text; a command-line thinking override is not added to that text.
 
 `inputs.load_agent()` loads the five files. `engine._payload()` assembles the
 request: model configuration becomes API parameters; persona becomes the system
@@ -121,31 +122,56 @@ Accepted delivered
 messages have a hard 512-token limit, determined from reported completion tokens
 minus reported reasoning tokens. The response must finish normally and include
 nonblank text and valid usage counts. An over-limit, truncated, malformed, or
-failed response stops the run; it is recorded and is never forwarded to the
-other agent. There are no automatic retries. Reasoning and usage records are
-saved locally and never added to either agent's conversation context.
+failed response stops the run and is never forwarded to the other agent.
+There are no automatic retries. Only accepted replies are included in the JSON
+log. Returned reasoning and token counts are saved alongside those replies and
+never added to either agent's conversation context.
 
 ## Saved runs
 
 Starting a run defaults to **20 accepted messages**; `run --max-messages` can
 choose another positive count, such as the four-message handshake above.
+Every run requires a nonblank `--trial-name NAME`, saved exactly as supplied.
 Every invocation starts a fresh conversation from the current input files, with
 a new `trial_id` and JSON log. The CLI supports only `run`; resume and inspection
 commands have been removed. Stopped and completed runs cannot be continued in place.
 
-Run records are stored under the ignored `runs/dialogue/` directory as plaintext
+Run records are stored directly in the ignored `Dialogue Archive/` directory as plaintext
 JSON snapshots. Open the saved path printed by the command in a text editor to
-review the full record, including returned reasoning.
+review the accepted dialogue and returned reasoning.
 
-Snapshots retain accepted messages and all attempts, including rejected
-responses. Every attempt has a `message_id`, and an accepted message references
-the same `message_id` so its delivered text can be paired with the corresponding
-thinking and usage. Each attempt's `response` stores `content`,
-`reasoning_content`, the full raw API `usage` object, and
-`word_counts: {"message": ..., "thinking": ...}`. Word counts use
-whitespace-separated words; a missing or non-text field has a null count.
+Each JSON file contains only these fields, written in this order:
+
+1. `trial_id`, `started_at`, `ended_at`.
+2. `trial_name`.
+3. `messages`: accepted turns in chronological order, each containing `speaker`,
+   `message`, `thinking`, `message_token_count`, and `thinking_token_count`, in
+   that order.
+4. `agent_a_inputs`: the original five file contents.
+5. `agent_b_inputs`: the original five file contents.
+
+Both input objects contain `model-config.txt`, `persona.txt`, `memory.txt`,
+`statements.txt`, and `starting-prompt.txt`, in that order. Values are the exact
+UTF-8 text read at startup, including the model configuration as text. The
+snapshotted initial memory stays unchanged as the dialogue grows.
+
+Timestamps use UTC ISO 8601 strings. `ended_at` is `null` while running and is set
+once when completion, a rejected response, a provider error, or Ctrl+C is saved.
+Abrupt termination or a failed final save can leave it `null`; an end time is
+not invented for an event that could not be recorded.
+
+`message_token_count` uses the existing conservative non-reasoning bound:
+reported completion tokens minus reasoning tokens. It is not an exact local
+tokenizer count. `thinking_token_count` is the reasoning-token count; disabled
+thinking uses zero when the provider omits that count. `thinking` contains the
+returned reasoning text, including an empty string if returned empty, or `null`
+when no reasoning text was returned. Speaker labels are `agent_a` and `agent_b`.
+
+Rejected replies, attempt records, message IDs, status/error metadata, raw usage,
+word counts, and aggregate totals are not included in the JSON file.
 During execution, the terminal shows accepted replies, their message and thinking
-word counts, and token usage. It also prints token totals per agent and for the
+word counts, and token usage. Word counts use whitespace-separated words. The
+terminal also prints token totals per agent and for the
 whole chat when the run completes or stops after a response rejection, provider
 error, or Ctrl+C. API usage and computed word counts remain distinct; word counts
 are not token counts. Terminal summaries are not saved as a separate report file.
@@ -153,7 +179,7 @@ are not token counts. Terminal summaries are not saved as a separate report file
 Each new run creates one detailed, owner-only JSON log:
 
 ```text
-runs/dialogue/TRIAL_ID.json
+Dialogue Archive/TRIAL_ID.json
 ```
 
 Original input files are never overwritten. The JSON log stores the exact input
@@ -163,33 +189,29 @@ A new run reads only the current editable inputs and never automatically imports
 another run's history. To supply prior
 material deliberately, edit that agent's input `memory.txt` before the new run.
 
-Existing JSON records retain their saved prompts, history, and metadata. Starting
-a new run uses the five files above and saves a version-2 record with
-`memory_format: blended`. Superseded prompt files were removed from the working
+Existing JSON records retain their previous layouts and are not rewritten.
+New runs use the ordered fields above. Superseded prompt files were removed from the working
 tree; earlier private prompt contents remain in their existing detailed run logs,
 while prior tracked source prompts are recoverable through Git history.
 
-The default output directory is `runs/dialogue/`. The retained research chats
-are grouped in its `deliberation/` and `deliberation-no-thinking/` subdirectories.
-Historical bird/egg runs are in
+The default output directory is `Dialogue Archive/` in the project directory.
+The retained earlier research chats remain in `runs/dialogue/deliberation/` and
+`runs/dialogue/deliberation-no-thinking/`. Historical bird/egg runs are in
 `runs/backups/dialogue/`.
 
 Override storage or credential file paths with `--output-dir` and `--keys-file`
-on `run`. Custom output directories outside
-`runs/` are not automatically ignored by Git; keep private artifacts out of
-commits. The default ignore rules cover the standard logs in `runs/`.
+on `run`. Custom output directories outside `Dialogue Archive/` and `runs/` are
+not automatically ignored by Git; keep private artifacts out of commits. The
+default ignore rules cover both standard output directories.
 
 An adjacent `.json.lock` file guards the active run against concurrent writers.
 Normal exits, errors, and Ctrl+C remove it. Abrupt termination can leave a stale
 lock beside the record.
 
 Normal completion exits with status `0`; an early stop or error exits with `1`;
-Ctrl+C saves progress and exits with `130`. The JSON record also retains a local
-`interruption_notes` entry marking where the chat stopped, including the time,
-accepted message count, message IDs, and a remark. These notes are never sent to
-either agent. New runs record `status: stopped` after Ctrl+C, a rejected response,
-or a provider error. Read the saved JSON file for progress and diagnostics; use
-`run` when ready to start a fresh conversation.
+Ctrl+C saves accepted progress and the end timestamp, then exits with `130`.
+Stop reasons remain in the terminal output. Read the saved JSON file for the
+accepted dialogue; use `run` with a trial name when ready for a fresh conversation.
 
 Prompts and accepted dialogue are sent to DeepSeek. Saved run records contain
 the prompts, dialogue, reasoning, and usage, so treat them as private research
@@ -203,7 +225,7 @@ The dialogue implementation separates execution from its outputs:
 | Module | Responsibility |
 | --- | --- |
 | `engine.py` | Set up runs, build requests, validate responses, and alternate agent turns. |
-| `records.py` | Generate timestamps, reserve and lock run files, and save JSON snapshots. |
+| `records.py` | Select the ordered JSON fields, timestamp runs, and reserve, lock, and save run files. |
 | `reporting.py` | Format per-response token usage and emit terminal summaries. |
 | `usage.py` | Share token-accounting checks between response validation and terminal reporting. |
 
