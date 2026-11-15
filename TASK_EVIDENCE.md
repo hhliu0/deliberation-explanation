@@ -372,3 +372,62 @@ Verification:
 - Automated tests collected/executed: **0**. No simulated trials, local trial
   pipeline, or extra live requests were added. Future-call integration and
   failure behavior were reviewed statically; actual artifact export was verified.
+
+### Text Likert responses and expired numeric trial — 2026-11-15
+
+After the separate export milestone `3e5d403`, the user requested text responses
+instead of numeric scores, then explicitly selected the standard Likert labels:
+`strongly disagree`, `disagree`, `neutral`, `agree`, `strongly agree`. The user
+also explicitly requested that the existing numeric trial log be labeled expired.
+Work continued on the existing task branch from a clean `3e5d403` baseline.
+
+A shared label list now supplies the model instructions, response validation,
+and historical export mapping. New answers must contain the exact lowercase
+text labels; numbers, numeric strings, synonyms, and other capitalization fail
+validation and use the existing single-retry behavior. New detailed logs have
+`format_version: 2`. The export schema remains exactly the user's permitted
+fields. Only exports from legacy format-1 logs translate numeric 1–5 to labels;
+new numeric model answers are not silently converted.
+
+The local Skeptic's response instruction now requests exact Likert text labels;
+its prior file was preserved in `backups/personas.numeric.local.yaml` before
+editing. Its substantive persona text is unchanged. The original full trial and
+numeric score file were preserved with exclusive, synchronized owner-only writes:
+
+- `runs/ratings/backups/809d6f2537b842149f565df523d7fa47.pre-expiration.yaml`
+- `runs/ratings/backups/809d6f2537b842149f565df523d7fa47.attempt-1.scores-numeric.yaml`
+
+The existing full trial is now `status: expired`, with an updated modification
+timestamp. Every other field, including original prompts, numeric answers,
+attempt status, reasoning, and usage, is unchanged. The original full-log backup
+matches the previously recorded SHA-256
+`6069579b96589888ff7d9e0f09bed976ab0bdae4f8c4c8eb2af78a91216dddcd`.
+Its separate score file now contains the equivalent text labels and
+`status: expired`; an expired trial's status takes precedence over its historical
+call status when exporting. No additional fields were added to the score file.
+
+Verification:
+
+- `python3 -m black deepseek_ratings/engine.py deepseek_ratings/response.py deepseek_ratings/records.py`,
+  followed by `python3 -m black --check deepseek_ratings/engine.py deepseek_ratings/response.py deepseek_ratings/records.py`:
+  all three modules unchanged/passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/deepseek-ratings-pycache .venv/bin/python -m py_compile deepseek_ratings/engine.py deepseek_ratings/response.py deepseek_ratings/records.py`:
+  all three changed modules compiled.
+- `git diff --check`: passed.
+- One-off inspection using the actual persona and actual saved trial confirmed
+  the exact five labels and text-format example in the request, absence of the
+  old integer instruction, five correctly translated statement/score pairs,
+  exact allowed export keys, expired status, retained original response data,
+  byte-identical original-log backup, credential exclusion, and mode `600` on
+  the updated files and recovery copies.
+- One negative control passed: the real previously accepted numeric provider
+  response is now rejected with `invalid_statement_id_or_score` and no validated
+  ratings. No fabricated provider response or simulated trial was used.
+- Independent `gpt-6-astra` / high read-only review found no blocking issue with
+  the text-label interfaces, versioning, and historical export mapping. The final
+  expired-status propagation received a follow-up static review with no blocking
+  findings.
+- No additional API calls, persistent automated tests, local trial pipeline,
+  tooling, or dependencies were added. Direct text responses from a new live
+  model call have not been verified. Total model/review usage and cost remain
+  unknown.

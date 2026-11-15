@@ -77,12 +77,13 @@ automatic. Each trial evaluates one persona, not all personas in the file.
 ```
 
 Use `--thinking disabled` for a separate non-thinking trial. Enabled is the
-default, with high reasoning effort. Scores are 1 strongly disagree, 2 disagree,
-3 neither agree nor disagree, 4 agree, and 5 strongly agree. The final message
-contains compact JSON only:
+default, with high reasoning effort. Scores use these five standard Likert text
+responses, in increasing agreement order: **strongly disagree**, **disagree**,
+**neutral**, **agree**, **strongly agree**. The model returns these exact lowercase
+labels directly, not numbers. The final message contains compact JSON only:
 
 ```json
-{"ratings":[{"id":"s1","score":4}]}
+{"ratings":[{"id":"s1","score":"agree"}]}
 ```
 
 The system message combines the selected persona with the scoring instructions
@@ -105,7 +106,9 @@ With thinking enabled, this message limit is an acceptance check after generatio
 not a separate server-side message budget. Rejected responses can exceed it.
 
 Responses must finish normally, contain valid JSON with every expected statement
-exactly once, use integer scores from 1 through 5, and include adequate accounting.
+exactly once, use one of the five exact Likert labels, and include adequate accounting.
+Numeric scores, numeric strings, synonyms, or alternative capitalization are invalid
+and follow the existing backup-and-single-retry behavior.
 Blank, truncated, oversized, malformed, or unaccountable answers are rejected.
 
 On the first rejected answer, the tool durably saves the full attempt, creates
@@ -148,14 +151,16 @@ status: accepted
 model: deepseek-flash
 scores:
   - statement: Independent evaluation should precede deployment.
-    score: 4
+    score: agree
 ```
 
 Retry calls have separate numbered files under the same trial ID. Status is
 `accepted`, `rejected`, `failed`, or `interrupted`, as recorded for that call in
-the detailed log. If a call provides no complete, valid set of scores, each
+the detailed log. A trial marked `expired` also has `status: expired` in its
+separate score files, while its original call records remain intact.
+If a call provides no complete, valid set of scores, each
 statement has `score: null`; scores are never invented. A rejected call can have
-valid scores but fail another check, such as the output-token limit, so check its
+valid labels but fail another check, such as the output-token limit, so check its
 status. Reasons remain in the full log. Score files contain no prompts, thinking,
 token counts, issue details, or additional metadata.
 
@@ -163,6 +168,12 @@ The complete log is saved first and retained alongside these exports. Score
 files use the same owner-only, atomic, synchronized writes. A score-file write
 failure stops the run before any further request. `--output-dir` moves both the
 full log and its `scores/` subdirectory together.
+
+New detailed logs use `format_version: 2` for text responses. Historical
+`format_version: 1` logs retain their original numeric scores. The initial numeric
+trial is marked `expired`, with its original log preserved in a backup. Exporting
+their separate score files translates 1–5 to the five labels above in order;
+this conversion applies only to historical exports, not new model answers.
 
 Each attempt stores these separate counts:
 

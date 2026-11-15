@@ -9,6 +9,7 @@ from typing import Any, Dict
 import yaml
 
 from .api import RatingError, ensure_no_secret
+from .response import LIKERT_RESPONSES
 
 
 def now() -> str:
@@ -93,11 +94,20 @@ def save_scores(
         / "scores"
         / (log_path.stem + ".attempt-" + str(number) + ".yaml")
     )
-    by_id = {item["id"]: item["score"] for item in attempt.get("ratings") or []}
+    by_id = {}
+    for item in attempt.get("ratings") or []:
+        score = item["score"]
+        # Only historical format-1 exports translate numbers. New API answers
+        # must already contain exact text labels to pass response validation.
+        if state.get("format_version") == 1 and type(score) is int and 1 <= score <= 5:
+            score = LIKERT_RESPONSES[score - 1]
+        if not isinstance(score, str) or score not in LIKERT_RESPONSES:
+            raise RatingError("Cannot export an invalid Likert response.")
+        by_id[item["id"]] = score
     data = {
         "trial_id": state["trial_id"],
         "created_at": attempt["started_at"],
-        "status": attempt["status"],
+        "status": "expired" if state["status"] == "expired" else attempt["status"],
         "model": state["request"]["model"],
         "scores": [
             {"statement": item["text"], "score": by_id.get(item["id"])}

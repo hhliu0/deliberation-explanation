@@ -6,6 +6,14 @@ from typing import Any, Dict, List, Tuple
 
 from .api import ensure_no_secret
 
+LIKERT_RESPONSES = (
+    "strongly disagree",
+    "disagree",
+    "neutral",
+    "agree",
+    "strongly agree",
+)
+
 COUNT_FIELDS = (
     "input_tokens",
     "message_output_tokens",
@@ -178,8 +186,8 @@ def evaluate(
             or not isinstance(rating["id"], str)
             or rating["id"] not in expected
             or rating["id"] in seen
-            or type(rating["score"]) is not int
-            or not 1 <= rating["score"] <= 5
+            or not isinstance(rating["score"], str)
+            or rating["score"] not in LIKERT_RESPONSES
         ):
             issues.append("invalid_statement_id_or_score")
             return result
