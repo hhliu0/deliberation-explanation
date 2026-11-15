@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from . import api, inputs
 from .api import DialogueError
-from .inputs import GENERATION, GENERATION_DISABLED
+from .inputs import GENERATION
 
 AGENTS = ("agent_a", "agent_b")
 LABELS = {"agent_a": "Agent A", "agent_b": "Agent B"}
@@ -143,9 +143,7 @@ def _response(
 
 
 def _generation(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
-    """Read an agent's generation settings from a current or legacy run."""
-    if state["format_version"] == 1:
-        return state["settings"]["generation"]
+    """Read an agent's generation settings from the current run."""
     config = state["settings"]["agents"][agent]["model_config"]
     return {key: value for key, value in config.items() if key != "model"}
 
@@ -247,103 +245,6 @@ def _run_lock(path: Path):
             lock.unlink()
         except FileNotFoundError:
             pass
-
-
-def _read_state(path: Path) -> Dict[str, Any]:
-    """Validate current and historical snapshots for read-only inspection."""
-    try:
-        state = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(state, dict) or state.get("format_version") not in (1, 2):
-            raise ValueError()
-        if not isinstance(state["trial_id"], str):
-            raise ValueError()
-        settings = state["settings"]
-        if settings["peer_max_tokens"] != PEER_LIMIT:
-            raise ValueError()
-        for agent in AGENTS:
-            agent_config = settings["agents"][agent]
-            if state["format_version"] == 1:
-                if settings["generation"] not in (GENERATION, GENERATION_DISABLED):
-                    raise ValueError()
-                for field in ("prompt", "model"):
-                    if (
-                        not isinstance(agent_config[field], str)
-                        or not agent_config[field].strip()
-                    ):
-                        raise ValueError()
-            else:
-                if settings.get("memory_format", "separated") not in (
-                    "blended",
-                    "separated",
-                ):
-                    raise ValueError()
-                inputs.validate_parts(agent_config["inputs"])
-                expected = inputs.model_config(
-                    agent_config["inputs"]["model_config"],
-                    settings["thinking_override"],
-                )
-                if agent_config["model_config"] != expected:
-                    raise ValueError()
-        if not isinstance(state["messages"], list) or not isinstance(
-            state["attempts"], list
-        ):
-            raise ValueError()
-        if not isinstance(state.get("interruption_notes", []), list):
-            raise ValueError()
-        attempts = {}
-        for attempt in state["attempts"]:
-            if not isinstance(attempt, dict) or attempt["agent"] not in AGENTS:
-                raise ValueError()
-            if (
-                not isinstance(attempt["message_id"], str)
-                or attempt["message_id"] in attempts
-            ):
-                raise ValueError()
-            if not isinstance(attempt["trial_id"], str):
-                raise ValueError()
-            if attempt["status"] not in (
-                "in_flight",
-                "unknown",
-                "accepted",
-                "rejected",
-                "error",
-            ):
-                raise ValueError()
-            if "response" in attempt and not isinstance(attempt["response"], dict):
-                raise ValueError()
-            attempts[attempt["message_id"]] = attempt
-        accepted_ids = [
-            attempt["message_id"]
-            for attempt in state["attempts"]
-            if attempt["status"] == "accepted"
-        ]
-        message_ids = [item["message_id"] for item in state["messages"]]
-        if accepted_ids != message_ids:
-            raise ValueError()
-        for index, item in enumerate(state["messages"]):
-            if item["sender"] != AGENTS[index % 2]:
-                raise ValueError()
-            if not isinstance(item["content"], str) or not item["content"].strip():
-                raise ValueError()
-            attempt = attempts[item["message_id"]]
-            result = attempt["response"]
-            if (
-                attempt["status"] != "accepted"
-                or attempt["agent"] != item["sender"]
-                or result.get("content") != item["content"]
-                or result.get("finish_reason") != "stop"
-            ):
-                raise ValueError()
-            bound = _delivery_bound(
-                _usage(result.get("usage")), _generation(state, item["sender"])
-            )
-            if bound is None or bound > PEER_LIMIT:
-                raise ValueError()
-        return state
-    except (OSError, ValueError, TypeError, KeyError, UnicodeError, DialogueError):
-        raise DialogueError(
-            "Cannot read this run: it is unreadable, incomplete, or incompatible."
-        ) from None
 
 
 def _usage_text(usage: Dict[str, Any]) -> str:
@@ -553,7 +454,7 @@ def _execute(
         raise KeyboardInterrupt()
     if state["status"] != "completed":
         raise DialogueError(
-            "The trial stopped early. Inspect the saved JSON for details."
+            "The trial stopped early. Read the saved JSON file for details."
         )
     return path
 
@@ -594,52 +495,3 @@ def run_dialogue(
     path = _reserve(output_dir, state, keys)
     with _run_lock(path):
         return _execute(state, path, keys, emit)
-
-
-def inspect_run(
-    run_path: Path, show_thinking: bool, emit: Callable[[str], None]
-) -> None:
-    """Display a saved run's attempts, usage, and optional reasoning without API calls."""
-    state = _read_state(run_path)
-    emit(
-        "Chat: " + state["trial_id"] + " (" + str(state.get("status", "unknown")) + ")"
-    )
-    for note in state.get("interruption_notes", []):
-        if isinstance(note, dict):
-            emit(
-                "Interruption: "
-                + str(note.get("remark", "Stopped here."))
-                + " At: "
-                + str(note.get("stopped_at", "unknown"))
-            )
-    for number, attempt in enumerate(state["attempts"], 1):
-        emit(
-            "\nRequest "
-            + str(number)
-            + " — "
-            + LABELS[attempt["agent"]]
-            + " ["
-            + attempt["status"]
-            + "]"
-        )
-        record = attempt.get("response", {})
-        emit("Message ID: " + attempt["message_id"])
-        if isinstance(record.get("content"), str):
-            emit(record["content"])
-        if show_thinking:
-            emit(
-                "Thinking (local only):\n"
-                + str(record.get("reasoning_content", "Not returned."))
-            )
-        emit(_usage_text(_usage(record.get("usage"))))
-        counts = record.get("word_counts", {})
-        if isinstance(counts, dict):
-            emit(
-                "Words (local): message="
-                + str(counts.get("message", "unknown"))
-                + ", thinking="
-                + str(counts.get("thinking", "unknown"))
-            )
-        if isinstance(attempt.get("error_code"), str):
-            emit("Outcome: " + attempt["error_code"])
-    _summary(state, emit)

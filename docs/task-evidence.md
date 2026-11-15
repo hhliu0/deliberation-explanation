@@ -963,3 +963,80 @@ Verification:
 - Automated test-suite cases: zero. No runtime tests or live API requests were
   needed for these docstring-only changes; no test pipeline, tooling setup, push,
   or deployment was performed.
+
+
+## Remove the dialogue inspection pipeline (2026-11-15)
+
+### Scope and recovery
+
+The user requested removal of inspection and its old wiring while retaining
+dialogue execution, local JSON logs, and terminal summaries. Existing shared
+research use and MIT licensing remain unchanged; no external source was reused.
+
+Baseline: `cd359f1`, with an empty index and one pre-existing user edit commenting
+out `inspect_run` in `deepseek_dialogue/engine.py`. Before editing, the original
+working engine, full unstaged patch, empty staged patch, and baseline hash were
+saved in `/private/tmp/dialogue-remove-inspection-h08mi4s_/`. Work uses the local
+branch `codex/remove-dialogue-inspection`. To restore the starting state, revert
+this task's commit, then restore the saved `engine.py` or apply `starting.patch`
+to recover the user's commented-out function; review any later edits first.
+No private inputs, credentials, historical logs, or existing backups were read,
+modified, moved, or removed.
+
+### Result
+
+- The CLI exposes only `run`, with all existing run options and defaults.
+  Removed the inspection subcommand, `--show-thinking`, dispatch branch,
+  `_read_state`, and the user's commented-out `inspect_run` body.
+- Removed the V1-only branch from `_generation` and the now-unused
+  `GENERATION_DISABLED` engine import. `GENERATION` remains necessary for live
+  response/token validation. New-run format version and all JSON metadata remain
+  unchanged, including `memory_format`, accepted history, response details,
+  interruption notes, and usage.
+- Dialogue execution, current generation profiles, response limits, JSON
+  reservation/saving, credential safeguards, permissions, and writer locking
+  retain their behavior. `_usage_text`, its nested `count`, and `_summary` remain
+  active for terminal output. All remaining functions retain brief docstrings.
+- Error guidance now points to reading the saved JSON file. Current README and
+  dialogue documentation describe the run command, JSON logs, and terminal
+  summaries. Earlier evidence entries remain historical records.
+
+### Verification and review
+
+- `python3 -m black deepseek_dialogue/cli.py deepseek_dialogue/engine.py` formatted
+  the two changed modules using existing Black 25.11.0.
+  `python3 -m black --check deepseek_dialogue`: all six modules unchanged, passed.
+- `python3 -m deepseek_dialogue --help` and
+  `python3 -m deepseek_dialogue run --help`: both passed; only `run` is listed.
+- One-off `python3 -` checks compiled all 14 dialogue/rating modules without
+  bytecode writes. Fifteen retained top-level engine functions matched baseline
+  ASTs, allowing only the changed early-stop diagnostic string. `_generation`
+  was checked separately for the retained current-run behavior. The removed
+  function set is exactly `_read_state` and `inspect_run`.
+- The same check ran `python3 -m deepseek_dialogue inspect --help`,
+  `python3 -m deepseek_dialogue resume --help`, and
+  `python3 -m deepseek_dialogue run --show-thinking` as subprocesses: all three
+  returned the expected argparse exit 2. The baseline parser from
+  `git show cd359f1:deepseek_dialogue/cli.py` accepted `inspect` as a negative
+  control. Current run defaults, explicit options, and dispatch-call AST matched
+  baseline exactly.
+- Sixteen current-generation/payload comparisons passed across both agents,
+  thinking modes, and empty/nonempty initial memory and accepted history. Five
+  usage formats and four terminal summaries matched baseline output, covering
+  missing counts, cached tokens, empty history, and unknown attempts.
+- Direct temporary-file checks preserved complete JSON snapshots for stopped
+  and completed states, 0600 files, 0700 newly created directories, collision
+  rejection, exclusive writer locks, and lock cleanup on Ctrl+C. Only the JSON
+  file remained after cleanup. No dialogue trial was executed.
+- Current README/dialogue/deliberation local links resolve; API, input loader,
+  ratings, dependencies, ignore rules, and license diffs are empty.
+  `git diff --check` passed; no inspection names/callers remain in package source.
+- Independent `gpt-6.1-sol` / `xhigh` read-only review found no actionable
+  regressions, incomplete cleanup, or changed safeguards. A `gpt-6-luna` / `high`
+  inventory identified removal/preservation points; the lead checked those
+  findings, including the retained live use of `GENERATION`. Lead model/effort,
+  elapsed time, and all usage/cost are unknown; no routing or savings claim.
+- Automated test-suite cases: zero, following the existing project requirement.
+  Direct checks above passed; no simulated model runner, live API calls, tooling
+  installation, push, PR, or deployment. Full dialogue execution against the
+  provider was not exercised in this task.
