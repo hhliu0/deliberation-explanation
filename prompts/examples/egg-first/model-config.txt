@@ -1,6 +1,0 @@
-{
-  "model": "deepseek-flash",
-  "thinking": {"type": "enabled"},
-  "reasoning_effort": "high",
-  "max_tokens": 8192
-}

@@ -198,32 +198,6 @@ def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
     }
 
 
-def _save_memory(path: Path, state: Dict[str, Any]) -> None:
-    """Export derived memory after the authoritative JSON snapshot is saved."""
-    if state["format_version"] == 1:
-        return
-    directory = path.parent / "archive" / path.stem
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for agent in AGENTS:
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=directory,
-                prefix=".memory-",
-                delete=False,
-            ) as stream:
-                temporary = Path(stream.name)
-                stream.write(_memory(state, agent))
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(str(temporary), str(directory / (agent + ".memory.txt")))
-        finally:
-            if temporary is not None and temporary.exists():
-                temporary.unlink()
-
-
 def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
     state["updated_at"] = now()
     api.ensure_no_keys(state, keys)
@@ -242,7 +216,6 @@ def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(str(temporary), str(path))
-        _save_memory(path, state)
     except OSError:
         raise DialogueError(
             "Cannot save the run. No further requests will be made; retain the last saved snapshot."
@@ -487,11 +460,6 @@ def _execute(
         _save(path, state, keys)
         emit("Chat ID: " + state["trial_id"])
         emit("Saved trial: " + str(path.resolve()))
-        if state["format_version"] == 2:
-            emit(
-                "Memory archive: "
-                + str((path.parent / "archive" / path.stem).resolve())
-            )
         emit(
             "Progress: "
             + str(len(state["messages"]))
@@ -673,12 +641,6 @@ def resume_dialogue(
         state = _read_state(path)
         count = len(state["messages"])
         if count >= RESUME_TARGET:
-            try:
-                _save_memory(path, state)
-            except OSError:
-                raise DialogueError(
-                    "Cannot rebuild the memory archive. No API requests were made."
-                ) from None
             emit(
                 "Chat already has "
                 + str(count)

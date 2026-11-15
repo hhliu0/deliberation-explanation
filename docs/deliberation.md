@@ -1,31 +1,28 @@
-# Two agent deliberation starting prompts
+# Two agent deliberation
 
-These templates start a discussion between two agents with different recorded
+The discussion instructions start a discussion between two agents with different recorded
 positions on the same statement or situation. They aim to expose the reasons for
 disagreement and permit justified revision. Agreement is an allowed outcome, not
 the success criterion. This is a research-informed starting design; its effects
 have not been measured on this project's models or topics.
 
-Use the shared [discussion starting prompt](../prompts/deliberation/starting-prompt.txt)
-with the five-part input format described in [dialogue usage](dialogue.md).
-Each agent has a separate directory containing:
+Configure both agents in the only two directories under `prompts/`:
+`Agent A/` and `Agent B/`. Edit these files directly; the runner does not maintain
+separate examples, templates, thinking conditions, or archived input copies.
+See [dialogue usage](dialogue.md) for file formats and generation settings.
 
 | File | Deliberation input |
 | --- | --- |
 | `model-config.txt` | That agent's model and enabled/disabled thinking profile. |
 | `persona.txt` | `You are agent_a` or `You are agent_b`, followed by that persona's perspective. |
-| `memory.txt` | Its actual previously recorded position, reasons, uncertainty, and relevant context; may be empty when no prior record exists. |
+| `memory.txt` | Supplied context or prior judgments; may be empty. |
 | `statements.txt` | The shared statement(s) or situation, with identical wording for both agents. |
-| `starting-prompt.txt` | A copy of the shared discussion starting prompt linked above. |
+| `starting-prompt.txt` | The discussion instructions for that agent. |
 
-The original combined [Agent A](../prompts/deliberation/agent-a.template.txt) and
-[Agent B](../prompts/deliberation/agent-b.template.txt) drafts remain as historical
-reference material. They are no longer direct CLI inputs. When migrating a filled
-copy, place its persona and recorded context into the separate files, move the
-discussion targets into `statements.txt`, and use the current starting prompt.
-This also replaces the old instructions about named assistant messages with the
-new speaker-labeled memory format. Template placeholders are never filled by the
-program.
+Agent A currently uses The Skeptic and Agent B The Extrapolator. Their statements
+and first-run ratings were extracted from the existing research prompts. Both
+starting-prompt files contain the current discussion instructions, and both model
+configs initially enable thinking. Edit those same files to change a run.
 
 Keep persona and initial stance distinct: describe the intended perspective in
 `persona.txt` without requiring a particular conclusion, and keep the actual
@@ -50,18 +47,16 @@ and which came from this run. Speaker labels remain. The current starting prompt
 does not instruct the agents to distinguish a stored position from a position
 formed during the dialogue; that distinction remains available in the local log.
 This experimental choice permits source ambiguity but has not been shown to
-cause source confusion. The runner adds each accepted reply to both agents' trial-specific
-archived memory, without modifying the original inputs. Thinking and rejected
-responses remain local to the detailed log. New runs start from their selected
-input files and never automatically read an earlier run's archive.
+cause source confusion. The runner adds each accepted reply to both agents'
+working memory and saves the history in the detailed JSON log, without modifying
+the original inputs or creating memory text archives. Thinking and rejected
+responses stay out of model context. New runs read the current input files and
+never automatically load an earlier run's history.
 
-For private inputs, use directories under the already ignored `runs/` tree:
+The two input directories are already ignored by Git. Start a discussion with:
 
 ```sh
-python3 -m deepseek_dialogue run \
-  --agent-a runs/dialogue-inputs/agent-a \
-  --agent-b runs/dialogue-inputs/agent-b \
-  --max-messages 6
+python3 -m deepseek_dialogue run --max-messages 6
 ```
 
 Six alternating messages provide three contributions per agent for an initial
@@ -109,8 +104,9 @@ agreement, accuracy where applicable, and unsupported changes separately.
 
 ## Original prompt-draft evidence and recovery
 
-The following records the original combined-template task. The later five-part
-input implementation and its verification are recorded in [task evidence](task-evidence.md).
+The following records the original combined-template task. Those source templates
+have since been removed from the working tree. The later five-part input work and
+consolidation are recorded in [task evidence](task-evidence.md).
 
 Scope: two new task prompt templates and this companion repository document.
 No runtime, provider, dependency, credential, or configuration change is part of

@@ -2,8 +2,8 @@
 
 A terminal research tool for a dialogue between two DeepSeek agents, using Python
 3.9 or later and the standard library. No package installation is required.
-Agent A always starts, then the agents alternate. The included example debates
-whether the bird or the egg came first.
+Agent A always starts, then the agents alternate. Configure the discussion by
+editing the files in `prompts/Agent A/` and `prompts/Agent B/`.
 
 ## Credentials and first run
 
@@ -36,8 +36,8 @@ locally but has not yet been exercised against the live provider.
 
 ## Five input files per agent
 
-`--agent-a` and `--agent-b` now select directories. Each must contain these five
-UTF-8 plain-text files, read once at the start of a new run:
+The `prompts/` folder contains only `Agent A/` and `Agent B/`. Each contains one
+current copy of these five UTF-8 plain-text files, read once at the start of a new run:
 
 | File | Meaning |
 | --- | --- |
@@ -47,16 +47,20 @@ UTF-8 plain-text files, read once at the start of a new run:
 | `statements.txt` | One or more discussion targets, in ordinary text. Use the same targets for both agents. |
 | `starting-prompt.txt` | Instructions for opening and continuing the discussion. |
 
-The example directories are `prompts/examples/bird-first/` and
-`prompts/examples/egg-first/`. They include empty initial memories and can be run
-with the default command. For private inputs, use a location already ignored by
-Git, such as `runs/dialogue-inputs/agent-a/` and `runs/dialogue-inputs/agent-b/`:
+These are the default input directories. Edit the files in place to configure
+the next run, including thinking mode in `model-config.txt`. There are no separate
+example, deliberation, thinking, or archived input variants. Both directories are
+ignored by Git because they contain private research inputs. The current local
+files use The Skeptic for Agent A, The Extrapolator for Agent B, twelve statements,
+and the existing first-run ratings as memory.
 
 ```sh
-python3 -m deepseek_dialogue run \
-  --agent-a runs/dialogue-inputs/agent-a \
-  --agent-b runs/dialogue-inputs/agent-b
+python3 -m deepseek_dialogue run
 ```
+
+The optional `--agent-a DIR` and `--agent-b DIR` path overrides remain available;
+normal use needs neither. A fresh checkout does not contain the private editable
+inputs: create the two directories and their five files using the formats below.
 
 All five files are required. Only `memory.txt` may be blank. No template tokens
 are replaced and no input text is truncated or automatically summarized. Files
@@ -136,8 +140,6 @@ the same JSON file in place; it does not create another ID or trial file. Enter
 the same ID again to resume after another interruption. Existing saved JSON
 paths also work. If the chat already has at least 20 accepted messages, resume
 prints its current path without making API calls or modifying the JSON record.
-For five-part runs it also rebuilds the memory archive, repairing any interrupted
-export even when the dialogue has already reached the target.
 
 ```sh
 python3 -m deepseek_dialogue inspect runs/dialogue/TRIAL_ID.json
@@ -165,34 +167,28 @@ Reports show message and thinking word counts per response, with token usage
 totals per agent and for the whole chat. API usage and computed word counts
 remain distinct; word counts are not token counts.
 
-Each new run creates separate, owner-only plain-text memory files:
+Each new run creates one detailed, owner-only JSON log:
 
 ```text
 runs/dialogue/TRIAL_ID.json
-runs/dialogue/archive/TRIAL_ID/agent_a.memory.txt
-runs/dialogue/archive/TRIAL_ID/agent_b.memory.txt
 ```
 
-Custom output directories use the same adjacent `archive/TRIAL_ID/` layout.
-Original input files are never overwritten. The JSON log is authoritative:
-after saving it, the program atomically rewrites each memory file from the initial
-memory and accepted turns. This gives append-only dialogue content without
-duplicating turns after an interrupted write. Export failure stops further calls;
-resume repairs the exports from the log. Manual edits to archived memory are
-replaced on resume and are never read as new context. To explicitly use prior
-material in a new run, put the intended text in that new run's input `memory.txt`.
+Original input files are never overwritten. The JSON log stores the exact input
+text and accepted turns and is the only persistent record of growing memory.
+No separate memory text files, input copies, or input archives are generated.
+Resume rebuilds memory from this log; a new run reads only the current editable
+inputs and never automatically imports another run's history. To supply prior
+material deliberately, edit that agent's input `memory.txt` before the new run.
 
 Existing version-1 runs remain inspectable and resumable using their original
-complete prompts and named assistant messages. They are not converted to the
-five-part format or given new memory exports. Starting a new run with a single
-complete prompt file is no longer supported; split its contents into the five
-files above. The earlier example `.txt` files and filled research prompts remain
-available as source material.
+complete prompts and named assistant messages. Starting a new run uses the five
+files above. Superseded prompt files were removed from the working tree; earlier
+private prompt contents remain in their existing detailed run logs, while prior
+tracked source prompts are recoverable through Git history.
 
 Earlier version-2 logs without `settings.memory_format` retain their original
 `Initial memory` / `Dialogue so far` headings on resume. New runs save
-`memory_format: blended`; their archived memory uses the same unseparated text
-that enters the payload. Saved prompt text is preserved in both cases.
+`memory_format: blended`. Saved prompt text is preserved in both cases.
 
 The default output directory is `runs/dialogue/`. The retained research chats
 are grouped in its `deliberation/` and `deliberation-no-thinking/` subdirectories;
@@ -226,7 +222,7 @@ the same chat reaches 20 messages. These remarks also stay out of model context.
 Prompts and accepted dialogue are sent to DeepSeek. Saved run records contain
 the prompts, dialogue, reasoning, and usage, so treat them as private research
 artifacts. Credentials are not saved in run records. Keep private custom prompt
-directories under an ignored location such as `runs/dialogue-inputs/`.
+files in the ignored `prompts/Agent A/` and `prompts/Agent B/` directories.
 
 ## Development and licensing
 
@@ -234,7 +230,7 @@ This project intentionally includes no automated tests, test pipeline, or CI.
 Local syntax and formatting checks do not establish compatibility with the live
 API.
 
-The shared source code, documentation, and included example prompts use the
+The shared source code and documentation use the
 [MIT License](../LICENSE). The existing private research document, local credential
 files, private prompt files, and generated run records are excluded from the
 repository.

@@ -10,3 +10,5 @@ runs/
 Individual research note.docx
 .venv/
 *.local.yaml
+/prompts/Agent A/
+/prompts/Agent B/

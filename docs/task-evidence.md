@@ -758,3 +758,88 @@ Verification used direct functions, without a trial runner or provider request:
   independently checking old-V2 payload equality, blended content preservation,
   prompt scope, and documentation. Lead model/effort, all usage/cost, and exact
   total elapsed time remain unknown.
+
+
+## Single editable input set per agent (2026-11-15)
+
+### Requested scope and resulting layout
+
+The user explicitly requested one existing version of each dialogue component,
+then specified that `prompts/` must contain only `Agent A/` and `Agent B/` and
+nothing else. They separately confirmed stopping per-run memory text archives,
+with memory history retained only in the detailed run log. Those instructions
+supersede the earlier archive layout. The lead described consolidation and removal
+of superseded sources before performing it. No new source archive was created.
+
+Each agent directory now contains exactly `model-config.txt`, `persona.txt`,
+`memory.txt`, `statements.txt`, and `starting-prompt.txt`. The CLI defaults to those
+directories. Both remain editable private inputs, ignored by Git, with 0700
+folders and 0600 files. The two new ignore entries preserve the previously
+required exclusion of supplied personas and context from Git. No authentication,
+credential, provider, dependency, agent-tooling, or licensing settings changed.
+
+Agent A is The Skeptic; Agent B is The Extrapolator. The former thinking research
+prompts supplied their substantive personas, twelve identical statement targets,
+and the two first-run rating records. Persona response instructions specific to
+ratings were removed and agent identity was made explicit. Memory keeps the
+original own-rating block first and the peer-rating block second, using the
+correct speaker labels. No reasoning text from the separate no-thinking source
+variant was imported. Both current model configs use enabled/high/8192, and both
+starting prompts use the latest source-ambiguity discussion instructions. Users
+change these same files to configure subsequent runs.
+
+`_save_memory` and all archive writes/messages were removed. The atomic JSON
+snapshot still records exact input files, accepted history, attempts, reasoning,
+and usage. Inputs are never overwritten by a run. Saved-run payload construction
+and resume remain unchanged; completed resume no longer creates memory exports.
+No prior run logs or rating inputs/results were moved, changed, or deleted.
+
+### Recovery without new input copies
+
+Baseline was clean `076a585` on `codex/dialogue-five-part-inputs`. Before removal,
+all 15 tracked old prompt files matched the baseline Git bytes, and all four
+private old prompts matched existing active run log fields exactly:
+
+- `deliberation/skeptic.local.txt` and `deliberation/extrapolator.local.txt`:
+  `runs/dialogue/deliberation/18f961b2904d455b9e29371a2ab9d142.json`, respectively
+  `settings.agents.agent_a.prompt` and `settings.agents.agent_b.prompt`.
+- `deliberation-no-thinking/skeptic.local.txt` and
+  `deliberation-no-thinking/extrapolator.local.txt`:
+  `runs/dialogue/deliberation-no-thinking/8447b5d76ea648f29dfd4c5d31f6d6dc.json`,
+  the corresponding `settings.agents.<agent>.prompt` fields.
+
+The 19 superseded files and their empty former directories were removed only
+after verifying these exact matches and loading both new five-file sets. No
+unique private source content was lost. Tracked rollback is a revert of this
+consolidation commit; original private combined prompts can be restored from the
+fields above if needed. Current private Agent A/B inputs are not committed and
+must be preserved deliberately during any later rollback. No additional backup
+or prompt-copy directory was created.
+
+### Verification
+
+- `python3 -m black deepseek_dialogue/cli.py deepseek_dialogue/engine.py`: both
+  unchanged. `python3 -m black --check deepseek_dialogue`: six unchanged, passed.
+  `python3 -m deepseek_dialogue run --help` shows both new defaults.
+- Direct `python3 -` checks confirmed exactly two directories and ten files,
+  expected filenames, owner-only permissions, both thinking modes, and defaults.
+  An initial ignore check used `git check-ignore --quiet` with multiple paths,
+  which Git rejected. It was corrected to `git check-ignore --stdin -z`; all ten
+  paths were confirmed ignored and the complete check reran successfully.
+- Both substantive persona sections exactly match their original research text;
+  all twelve statement IDs/texts and both first-run rating blocks per agent match
+  the retained original logs. Checks left all ten new input file hashes unchanged.
+- On temporary copies of real saved history, V2 JSON saved and reloaded with
+  0600 permissions and no additional files/directories. Completed resume left
+  that JSON unchanged and created no archive. Original V1 and V2 payloads remain
+  dictionary-equal to the baseline engine. Fresh context excludes prior dialogue.
+- All fourteen Python modules passed direct `compile(...)` syntax checks without
+  cache writes. Current README/dialogue/deliberation links resolve. `git diff
+  --check` passed; transport, ratings, and dependency diffs are empty.
+- Independent `gpt-6.1-sol` / xhigh review verified exact source preservation
+  before removal, then the final tree, extraction, permissions, ignore coverage,
+  removed exports, documentation, and unchanged ratings/auth behavior. No blockers.
+- Automated test-suite cases: zero. No new tests, simulated model runner, local
+  trial pipeline, dependencies, live API calls, push, or deployment. Live behavior
+  of the new five-part prompt arrangement remains unmeasured. Lead model/effort,
+  all token usage/cost, and exact elapsed time remain unknown.

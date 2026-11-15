@@ -29,18 +29,19 @@ persona, or `--thinking disabled` for a fresh non-thinking trial. The
 
 ## Run a dialogue
 
-The default bird/egg example uses five text files per agent in
-`prompts/examples/bird-first/` and `prompts/examples/egg-first/`: model config,
-persona, initial memory, statements, and discussion starting prompt.
+Edit the five files in `prompts/Agent A/` and `prompts/Agent B/` to configure a
+run: model config, persona, initial memory, statements, and discussion starting
+prompt. Those are the only two folders under `prompts/`, with one current copy
+of each file per agent. Agent A is currently The Skeptic; Agent B is The Extrapolator.
 
 ```sh
 python3 -m deepseek_dialogue run --max-messages 4
 ```
 
-For a research deliberation, select each agent's input directory with `--agent-a`
-and `--agent-b`. Each new run archives its growing memory separately from the
-original inputs. The
-[deliberation guide](docs/deliberation.md) explains the reusable templates;
+Each run reads those files afresh. Accepted replies extend memory in the detailed
+run log; the program does not overwrite the input files or generate separate
+memory text archives. The
+[deliberation guide](docs/deliberation.md) explains the discussion design;
 [dialogue usage](docs/dialogue.md) covers starting, resuming, and inspecting chats.
 Dialogue output defaults to `runs/dialogue/`; rating output defaults to
 `runs/ratings/`.
@@ -50,12 +51,10 @@ Dialogue output defaults to `runs/dialogue/`; rating output defaults to
 ```text
 inputs/                              user YAML inputs; unchanged by cleanup
 prompts/
-  examples/                          five-part bird-first and egg-first inputs
-  deliberation/                      agent templates and private persona prompts
-  deliberation-no-thinking/          private prompts for the non-thinking condition
+  Agent A/                           five editable inputs for Agent A
+  Agent B/                           five editable inputs for Agent B
 runs/
   dialogue/
-    archive/                         per-trial growing memory files for new runs
     deliberation/                    retained twenty-message conversation
     deliberation-no-thinking/        retained non-thinking conversation
   ratings/
@@ -76,4 +75,4 @@ backups, outside the active results. Trial IDs and recorded contents are retaine
 
 Private inputs, filled prompts, credentials, and runs remain excluded from Git.
 See [task evidence](docs/task-evidence.md) for verification and recovery details.
-The shared source, documentation, and example prompts use the [MIT License](LICENSE).
+The shared source and documentation use the [MIT License](LICENSE).

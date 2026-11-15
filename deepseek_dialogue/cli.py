@@ -58,16 +58,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--agent-a",
         type=Path,
-        default=Path("prompts/examples/bird-first"),
+        default=Path("prompts/Agent A"),
         metavar="DIR",
-        help="Agent A five-part input directory (default: prompts/examples/bird-first)",
+        help="Agent A input directory (default: prompts/Agent A)",
     )
     run.add_argument(
         "--agent-b",
         type=Path,
-        default=Path("prompts/examples/egg-first"),
+        default=Path("prompts/Agent B"),
         metavar="DIR",
-        help="Agent B five-part input directory (default: prompts/examples/egg-first)",
+        help="Agent B input directory (default: prompts/Agent B)",
     )
     run.add_argument(
         "--thinking",
