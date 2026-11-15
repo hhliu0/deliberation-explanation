@@ -178,3 +178,110 @@ note at the correct position. No persistent test files were created. The two
 changed modules compiled, Black reported 5 files unchanged, and `git diff --check`
 passed after the note addition. Independent review of the final note change
 reported no blocking issues.
+
+## Independent persona ratings — 2026-11-15
+
+### Authorization, recovery, and implementation
+
+The user approved the terminal rating plan and explicitly requested its
+implementation. In planning, the user selected a separate command in this
+existing shared-research/MIT repository, five drafted sample statements, a
+512-token final-message acceptance cap, and thinking enabled for the first
+live trial. They explicitly approved project-local PyYAML setup and new
+single-key credential handling; the implementation request restated that approval.
+
+Baseline `5e03c06` had a clean tracked/index state. Work uses
+`codex/persona-ratings`; the existing `deepseek_dialogue` modules and prompts are
+unchanged. Local task commits are the recovery points; revert task-owned commits
+to roll back code, and remove the dedicated `.venv` separately if desired. Private
+inputs, credentials, and results must be retained deliberately during rollback.
+No push, shared-branch merge, or deployment is authorized or performed.
+
+The independent command accepts one persona YAML and one statements YAML, sends
+two fresh messages to `deepseek-flash`, and never reads prior trial records.
+Thinking enabled uses high effort and 8,192 combined generation tokens; disabled
+uses 512. Acceptance requires complete 1–5 integer ratings and at most 512 message
+tokens after subtracting reported reasoning and optional safety-review tokens.
+One malformed-answer retry uses the identical original payload only after a
+durable primary snapshot and exclusive backup. HTTP/network errors stop without
+retry. All attempts and original provider usage are retained in private YAML.
+
+Private source preparation produced an active Skeptic YAML, five sample statements,
+and an unchanged Extrapolator backup. Skeptic changes only replace the response
+format and the instruction to provide a prose justification. The original pasted
+attachment was not edited; its SHA-256 is
+`67dc1e887ca7b856fea65d8de7e7790f277333997b4fb3fd2128bd7c26895b68`.
+The existing private research document still has its previously recorded hash
+`18ce34671590d2968092716142b943d9ba3e5b4308678fa8000f7bc02a8ddb52`.
+
+The empty `ratings.local.env` template uses mode `600` and contains only a blank
+`DEEPSEEK_API_KEY` assignment plus a comment. No existing dialogue credentials
+were read or reused. The user will supply the rating key locally after
+implementation. Environment precedence and file validation are documented in
+`RATINGS.md`.
+
+### Dependency and source provenance
+
+Approved setup executed:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install --index-url https://pypi.org/simple --only-binary=:all: --no-deps -r requirements-ratings.txt
+```
+
+Python 3.9.6 installed only PyYAML 6.0.3, from the PyPI
+`pyyaml-6.0.3-cp39-cp39-macosx_11_0_arm64.whl` wheel. No global installation,
+source build, pip upgrade, SDK, formatter, or persistent tool configuration was
+added. Installed metadata identifies MIT licensing, and the installed wheel
+retains `pyyaml-6.0.3.dist-info/licenses/LICENSE`. No third-party application
+source was incorporated. The application uses Python standard-library HTTPS
+and independently written code following this repository's existing patterns.
+
+Interface research used official DeepSeek Chat Completions, JSON output,
+thinking, and model documentation linked in `RATINGS.md`. The Firecrawl developer
+search returned HTTP 402 without results; official pages were obtained through
+the available web search fallback. No private source or credentials were sent
+in documentation queries.
+
+### Verification before credentials
+
+- `PYTHONPYCACHEPREFIX=/private/tmp/deepseek-ratings-pycache .venv/bin/python -m py_compile deepseek_ratings/__init__.py deepseek_ratings/__main__.py deepseek_ratings/api.py deepseek_ratings/cli.py deepseek_ratings/inputs.py deepseek_ratings/records.py deepseek_ratings/response.py deepseek_ratings/engine.py`: all eight named modules compiled.
+- `python3 -m black deepseek_ratings`: existing Black 25.11.0 formatted six files;
+  two were unchanged. `python3 -m black --check deepseek_ratings`: eight unchanged,
+  passed. No formatter setup was changed.
+- `.venv/bin/python -m deepseek_ratings --help` and
+  `python3 -m deepseek_dialogue --help`: both invocations passed; rating help
+  exposes all six planned options, and the original dialogue commands remain.
+- `git diff --check`: passed.
+- A one-off inspection of the real prepared YAML, using `load_inputs`,
+  `build_payload`, and PyYAML, confirmed one active Skeptic, five statements,
+  exact equality of the backed-up Extrapolator with the attachment, unchanged
+  Skeptic text before the deliberation/response rules, and fresh two-message
+  payloads with the correct settings for both enabled and disabled thinking.
+  This was input inspection only: no provider completion or simulated response.
+- `git check-ignore ratings.local.env inputs/personas.local.yaml inputs/statements.local.yaml backups/extrapolator.local.yaml runs/ratings/example.yaml .venv/pyvenv.cfg`:
+  all six paths ignored. `stat -f '%Lp %N' ratings.local.env inputs/personas.local.yaml inputs/statements.local.yaml backups/extrapolator.local.yaml`:
+  all four real private files mode `600`.
+- `.venv/bin/python -m pip check`: no broken requirements. PyYAML metadata and its
+  retained MIT license were inspected directly.
+- Automated tests collected/executed: **0**, intentionally. No test suite, local
+  trial pipeline, simulated model runner, or CI was added. Error, backup/retry,
+  and interruption paths have static review only until observed in actual use.
+
+Independent security/integration review used `gpt-6-astra`, high effort,
+read-only; that reviewer did not implement the change. Review found one P2
+durability gap: new output-directory entries also needed their parents synced.
+The lead added recursive creation with immediate parent synchronization, and the
+reviewer confirmed the fix with no remaining blocking findings. A minor backup
+documentation wording clarification was also applied. No secret contents,
+simulated trials, tests, or live APIs were accessed by the reviewer.
+
+After the final edits, the three changed modules (inputs, response, records)
+compiled again; Black checks and `git diff --check` passed. A read-only
+`_sync_directory(Path('inputs'))` call confirmed directory fsync support on the
+actual filesystem without creating a trial. Lead model/effort, total tokens,
+and total cost are not exposed and remain unknown. No performance, cost, or
+routing comparison is claimed.
+
+Live trial status: not started; awaiting the user's locally supplied key after
+implementation. Static/input checks do not establish live API compatibility.

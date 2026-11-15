@@ -1,5 +1,10 @@
 # DeepSeek dialogue
 
+This repository also includes a separate terminal-only persona rating command,
+`deepseek_ratings`. See [the rating tool guide](RATINGS.md) for its one-key setup,
+YAML inputs, thinking toggle, retry rules, and independent YAML trial records.
+The dialogue command below retains its existing two-key workflow.
+
 A terminal research tool for a dialogue between two DeepSeek agents, using Python
 3.9 or later and the standard library. No package installation is required.
 Agent A always starts, then the agents alternate. The included example debates

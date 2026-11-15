@@ -8,3 +8,5 @@ keys.local.env
 runs/
 *.local.txt
 Individual research note.docx
+.venv/
+*.local.yaml
