@@ -27,7 +27,7 @@ has owner-only permissions; keep those permissions if you replace it.
 Start with a four-message handshake to check the live provider interface:
 
 ```sh
-python3 -m deepseek_dialogue run --trial-name "handshake" --max-messages 4
+python3 -m deepseek_dialogue run --trial-name "handshake" --enable-thinking --max-messages 4
 ```
 
 A four-message live handshake using the earlier complete-prompt format was
@@ -48,14 +48,15 @@ current copy of these five UTF-8 plain-text files, read once at the start of a n
 | `starting-prompt.txt` | Instructions for opening and continuing the discussion. |
 
 These are the default input directories. Edit the files in place to configure
-the next run, including thinking mode in `model-config.txt`. There are no separate
+the next run, and choose its thinking mode with the command-line flags below.
+There are no separate
 example, deliberation, thinking, or archived input variants. Both directories are
 ignored by Git because they contain private research inputs. The current local
 files use The Skeptic for Agent A, The Extrapolator for Agent B, twelve statements,
 and the existing first-run ratings as memory.
 
 ```sh
-python3 -m deepseek_dialogue run --trial-name "deliberation"
+python3 -m deepseek_dialogue run --trial-name "deliberation" --enable-thinking
 ```
 
 The optional `--agent-a DIR` and `--agent-b DIR` path overrides remain available;
@@ -90,11 +91,19 @@ For thinking disabled, use:
 
 The model name is independently configurable in each file. These are the two
 supported generation profiles; duplicate or extra configuration keys and other
-profiles are rejected before any request. `--thinking enabled|disabled` overrides
-both agents' profiles for that invocation without modifying their files. Without
-the flag, each agent uses its file's profile. The raw file text and the effective
-configuration are held separately during execution. The JSON log saves the
-original file text; a command-line thinking override is not added to that text.
+profiles are rejected before any request. Every run requires exactly one of
+`--enable-thinking` or `--not-enable-thinking`. The selected mode overrides both
+agents' generation profiles for that invocation without modifying their files.
+These flags replace the previous `--thinking enabled|disabled` option. The raw
+file text and effective configuration are held separately during execution. The
+JSON header records the selected mode, and the input sections preserve the
+original file text.
+
+For a run with thinking disabled:
+
+```sh
+python3 -m deepseek_dialogue run --trial-name "handshake" --not-enable-thinking --max-messages 4
+```
 
 `inputs.load_agent()` loads the five files. `engine._payload()` assembles the
 request: model configuration becomes API parameters; persona becomes the system
@@ -142,13 +151,17 @@ review the accepted dialogue and returned reasoning.
 
 Each JSON file contains only these fields, written in this order:
 
-1. `trial_id`, `started_at`, `ended_at`.
-2. `trial_name`.
-3. `messages`: accepted turns in chronological order, each containing `speaker`,
+1. `trial_name`.
+2. `trial_id`.
+3. `started_at`.
+4. `ended_at`.
+5. `thinking`: `"thinking enabled"` or `"not enabled"`, reflecting the selected
+   mode for both agents.
+6. `messages`: accepted turns in chronological order, each containing `speaker`,
    `message`, `thinking`, `message_token_count`, and `thinking_token_count`, in
    that order.
-4. `agent_a_inputs`: the original five file contents.
-5. `agent_b_inputs`: the original five file contents.
+7. `agent_a_inputs`: the original five file contents.
+8. `agent_b_inputs`: the original five file contents.
 
 Both input objects contain `model-config.txt`, `persona.txt`, `memory.txt`,
 `statements.txt`, and `starting-prompt.txt`, in that order. Values are the exact
@@ -179,8 +192,15 @@ are not token counts. Terminal summaries are not saved as a separate report file
 Each new run creates one detailed, owner-only JSON log:
 
 ```text
-Dialogue Archive/TRIAL_ID.json
+Dialogue Archive/TRIAL_NAME_TRIAL_ID.json
 ```
+
+The filename uses a safe version of the trial name followed by its unique ID.
+Path separators, reserved filename punctuation, and non-printable characters
+become underscores. Surrounding spaces/dots are removed and the name prefix is
+limited to 180 UTF-8 bytes, leaving room for the ID and lock-file suffix. An
+empty sanitized prefix becomes `trial`. The JSON retains the exact supplied
+trial name. Existing JSON files are not renamed.
 
 Original input files are never overwritten. The JSON log stores the exact input
 text and accepted turns and is the only persistent record of growing memory.

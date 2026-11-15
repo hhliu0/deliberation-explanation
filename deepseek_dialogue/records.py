@@ -41,10 +41,15 @@ def snapshot(state: Dict[str, Any]) -> Dict[str, Any]:
         )
     agents = state["settings"]["agents"]
     return {
+        "trial_name": state["trial_name"],
         "trial_id": state["trial_id"],
         "started_at": state["created_at"],
         "ended_at": state["ended_at"],
-        "trial_name": state["trial_name"],
+        "thinking": (
+            "thinking enabled"
+            if state["settings"]["thinking_override"] == "enabled"
+            else "not enabled"
+        ),
         "messages": messages,
         "agent_a_inputs": {
             filename: agents["agent_a"]["inputs"][part]
@@ -88,12 +93,24 @@ def save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
             temporary.unlink()
 
 
+def filename(trial_name: str, trial_id: str) -> str:
+    """Build a bounded filename from the readable trial name followed by its ID."""
+    prefix = "".join(
+        char if char.isprintable() and char not in '<>:"/\\|?*' else "_"
+        for char in trial_name
+    )
+    prefix = prefix.strip(" .").encode("utf-8")[:180].decode("utf-8", errors="ignore")
+    prefix = prefix.rstrip(" .") or "trial"
+    return prefix + "_" + trial_id + ".json"
+
+
 def reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> Path:
     """Create a new owner-only run file and save its initial snapshot."""
     api.ensure_no_keys(str(output_dir), keys)
+    path = output_dir / filename(state["trial_name"], state["trial_id"])
+    api.ensure_no_keys(str(path), keys)
     try:
         output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        path = output_dir / (state["trial_id"] + ".json")
         descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(descriptor)
     except OSError:

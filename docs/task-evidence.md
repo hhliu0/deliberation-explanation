@@ -1205,3 +1205,83 @@ sharing and MIT licensing remain unchanged; no external source was reused.
   Direct checks above passed; no simulated dialogue runner, live API request,
   installation, push, PR, or deployment occurred. Live dialogue execution was
   not exercised, and no sample trial was placed in the user's new archive.
+
+
+## Trial-name filenames and explicit thinking choice (2026-11-15)
+
+### Scope, approval, and recovery
+
+The user requested filenames with trial name before ID, JSON header order of
+name/ID/start/end followed by a thinking-enabled label, and an explicit command
+choice to enable or not enable thinking. The lead chose required mutually
+exclusive `--enable-thinking` and `--not-enable-thinking` flags, setting both
+agents consistently. These replace the former optional `--thinking` argument.
+
+The lead presented filename normalization, the 180-byte prefix limit, preservation
+of the exact JSON name, and a new full-path credential check under the user's
+AGENTS.md secret-handling approval boundary. The user explicitly replied
+**"Approve safe filenames and path check"** before those changes were made.
+Existing output-directory and whole-state credential checks remain in place.
+
+Baseline/index were clean at `1754219`. Work uses local branch
+`codex/dialogue-names-thinking`; reverting this task's commit restores the previous
+source and documentation. No existing files were renamed or private input/log
+contents accessed. Archive files retain their names across a source rollback.
+Shared-research use and MIT licensing remain unchanged; no external code reused.
+
+### Result
+
+- New files are `Dialogue Archive/<safe trial name>_<32-character ID>.json`.
+  Filename-unsafe punctuation and non-printable characters become underscores;
+  surrounding spaces/dots are trimmed. The prefix is limited to 180 UTF-8 bytes
+  without splitting a character, with `trial` as the empty-prefix fallback.
+  The full JSON name stays exactly as supplied. Generated filename and lock
+  components are at most 218 and 223 UTF-8 bytes, respectively.
+- The complete generated path is checked for credentials before directory/file
+  creation. Existing reservation, file modes, atomic replacement, and locking
+  remain intact; duplicate paths fail without overwriting.
+- JSON header order is now `trial_name`, `trial_id`, `started_at`, `ended_at`,
+  `thinking`. The new value is exactly `"thinking enabled"` or `"not enabled"`,
+  followed by the existing accepted messages and Agent A/B input sections.
+- Both CLI and direct engine calls require an explicit valid thinking mode before
+  input/credential loading. The same override reaches both agents; the selected
+  mode is saved in `settings.thinking_override` internally and drives the header
+  label. Original file contents, token accounting, and terminal output remain
+  unchanged. Current command examples and usage docs cover both flags.
+
+### Verification and review
+
+- `python3 -m black deepseek_dialogue/cli.py deepseek_dialogue/engine.py deepseek_dialogue/records.py`:
+  three unchanged; `python3 -m black --check deepseek_dialogue`: nine unchanged.
+  Existing Black 25.11.0 was used; `git diff --check` passed.
+- One-off `python3 -` checks compiled all 17 Python modules and confirmed remarks
+  on all 32 dialogue definitions. Six execution/validation functions plus
+  `now`, `save`, and `run_lock` matched baseline ASTs exactly.
+- Both flag choices mapped correctly; eight profile/agent combinations confirmed
+  overriding both source profiles to enabled/high/8192 or disabled/512. Six
+  expected argparse exit-2 checks covered missing/conflicting flags, the removed
+  thinking option, missing name, and removed inspect/resume commands. Two help
+  checks passed. Four invalid engine modes failed before input/key access.
+- Fifteen filename cases covered ordinary names, spaces, dots, traversal-like
+  text, absolute paths, backslashes, reserved punctuation, controls, Unicode,
+  long names, and a truncated multibyte boundary. All stayed single components
+  within the stated byte limits. Different IDs retained filename uniqueness.
+- Both thinking modes passed direct JSON/file checks for exact header order,
+  exact original names, unchanged messages/input sections/counts, end timestamps,
+  direct archive location, 0600/0700 permissions, collision rejection, lock
+  exclusion, and Ctrl+C cleanup. Baseline header order and ID-only filenames
+  failed the new expectations as negative controls.
+- A fake credential formed only after filename sanitization was rejected by the
+  new complete-path scan before the output directory or file existed; the raw
+  state alone did not contain that credential. No real credentials were used.
+- A further `python3 -` check parsed all five current dialogue command examples
+  and verified their explicit modes and local documentation links. API, input
+  loader, reporting, shared accounting, ratings, dependencies, ignore rules, and
+  license diffs are empty.
+- Independent `gpt-6-astra` / `high` read-only review found no actionable findings
+  or blockers. Initial compatibility/path audit used `gpt-6-luna` / `high`, whose
+  findings the lead verified. Lead model/effort, elapsed time, and usage/cost are
+  unknown; no model-routing or savings claim is made.
+- Automated test-suite cases: zero, following the project requirement. All direct
+  checks above passed; no simulated dialogue runner, live API call, installation,
+  push, PR, or deployment. Full live execution was not exercised in this task.

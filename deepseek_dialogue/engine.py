@@ -263,12 +263,14 @@ def run_dialogue(
     output_dir: Path,
     emit: Callable[[str], None],
     trial_name: str,
-    thinking: Optional[str] = None,
+    thinking: str,
 ) -> Path:
     """Load both agents, create a fresh run record, and execute the dialogue."""
     _check_limit(max_messages)
     if not isinstance(trial_name, str) or not trial_name.strip():
         raise DialogueError("The trial name must be nonblank text.")
+    if thinking not in ("enabled", "disabled"):
+        raise DialogueError("Choose whether to enable thinking for this trial.")
     agents = {
         "agent_a": inputs.load_agent(agent_a_path, thinking),
         "agent_b": inputs.load_agent(agent_b_path, thinking),

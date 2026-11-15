@@ -73,11 +73,20 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="Agent B input directory (default: prompts/Agent B)",
     )
-    run.add_argument(
-        "--thinking",
-        choices=("enabled", "disabled"),
-        default=None,
-        help="override both agents' file-based thinking settings for this run",
+    thinking = run.add_mutually_exclusive_group(required=True)
+    thinking.add_argument(
+        "--enable-thinking",
+        dest="thinking",
+        action="store_const",
+        const="enabled",
+        help="enable thinking for both agents",
+    )
+    thinking.add_argument(
+        "--not-enable-thinking",
+        dest="thinking",
+        action="store_const",
+        const="disabled",
+        help="disable thinking for both agents",
     )
     _add_run_options(run)
 
