@@ -1,4 +1,4 @@
-"""Terminal-only entry point for an independent rating trial."""
+"""Terminal entry point for one independent, five-file rating trial."""
 
 import argparse
 import json
@@ -7,50 +7,57 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from .api import RatingError
+from .inputs import AGENTS
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Define agent selection, trial naming, thinking mode, and local paths."""
     parser = argparse.ArgumentParser(
         prog="deepseek_ratings",
-        description="Rate a statement list using one persona and a fresh DeepSeek request.",
+        description="Rate statements using one agent's five files and a fresh DeepSeek request.",
     )
-    parser.add_argument("--personas", type=Path, required=True, metavar="FILE")
-    parser.add_argument("--statements", type=Path, required=True, metavar="FILE")
-    parser.add_argument(
-        "--persona", help="persona ID (optional for a single-persona file)"
+    parser.add_argument("--agent", choices=tuple(AGENTS), required=True)
+    parser.add_argument("--trial-name", required=True, metavar="NAME")
+    thinking = parser.add_mutually_exclusive_group(required=True)
+    thinking.add_argument(
+        "--enable-thinking", dest="thinking", action="store_const", const="enabled"
+    )
+    thinking.add_argument(
+        "--not-enable-thinking", dest="thinking", action="store_const", const="disabled"
     )
     parser.add_argument(
-        "--thinking", choices=("enabled", "disabled"), default="enabled"
+        "--prompts-dir",
+        type=Path,
+        default=Path("prompts ratings"),
+        help="parent of Agent A and Agent B input folders (default: prompts ratings)",
     )
     parser.add_argument("--keys-file", type=Path, default=Path("ratings.local.env"))
-    parser.add_argument("--output-dir", type=Path, default=Path("runs/ratings"))
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("rating archive"),
+        help="JSON destination (default: rating archive)",
+    )
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the selected agent and display validated scores and token summaries."""
     args = build_parser().parse_args(argv)
-    try:
-        from .engine import run
-    except ModuleNotFoundError as error:
-        if error.name != "yaml":
-            raise
-        print(
-            "PyYAML is required; use the documented rating virtual environment.",
-            file=sys.stderr,
-        )
-        return 1
+    from .engine import run
+
     try:
         state = run(
-            args.personas,
-            args.statements,
-            args.persona,
-            args.thinking,
-            args.keys_file,
-            args.output_dir,
+            agent_id=args.agent,
+            input_dir=args.prompts_dir / AGENTS[args.agent],
+            trial_name=args.trial_name,
+            thinking=args.thinking,
+            keys_file=args.keys_file,
+            output_dir=args.output_dir,
         )
     except KeyboardInterrupt:
         print(
-            "Interrupted. No automatic continuation; inspect the printed YAML path.",
+            "Interrupted. Read the printed JSON path for saved progress.",
             file=sys.stderr,
         )
         return 130
@@ -83,5 +90,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             counts["thinking_tokens"],
         )
     )
-    print("Trial totals (all attempts): " + json.dumps(state["token_totals"]))
+    print("Trial totals: " + json.dumps(state["token_totals"]))
     return 0

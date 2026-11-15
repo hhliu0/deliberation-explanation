@@ -105,7 +105,7 @@ def ensure_no_secret(value: Any, key: str) -> None:
 
 
 def complete(payload: Dict[str, Any], key: str) -> bytes:
-    """Return raw bytes so malformed responses can be backed up before retry."""
+    """Return raw response bytes for strict validation and credential checks."""
     request = urllib.request.Request(
         ENDPOINT,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -148,7 +148,7 @@ def complete(payload: Dict[str, Any], key: str) -> bytes:
     if len(raw) > MAX_RESPONSE_BYTES:
         raise TransportError(
             "response_too_large",
-            "The response exceeded the transport safety limit; its saved body is partial.",
+            "The response exceeded the transport safety limit; stopped.",
             uncertain=True,
             raw=raw,
         )

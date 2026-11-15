@@ -1,36 +1,83 @@
-"""Durable owner-only YAML snapshots and exclusive rejected-attempt backups."""
+"""Durable owner-only JSON snapshots containing accepted ratings and input texts."""
 
+import json
 import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-import yaml
-
 from .api import RatingError, ensure_no_secret
-from .response import LIKERT_RESPONSES
+from .inputs import FILES
 
 
 def now() -> str:
+    """Return the current UTC time as an ISO 8601 timestamp."""
     return datetime.now(timezone.utc).isoformat()
 
 
-class RecordDumper(yaml.SafeDumper):
-    def ignore_aliases(self, data):
-        return True
-
-
-def _string(dumper, value):
-    return dumper.represent_scalar(
-        "tag:yaml.org,2002:str", value, style="|" if "\n" in value else None
+def snapshot(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Select ordered trial details, accepted output, and original input texts."""
+    accepted = next(
+        (
+            attempt
+            for attempt in state["attempts"]
+            if attempt["number"] == state["accepted_attempt"]
+            and attempt["status"] == "accepted"
+        ),
+        None,
     )
+    ratings = {
+        item["id"]: item["score"]
+        for item in (state["ratings"] or [])
+        if accepted is not None and state["status"] == "completed"
+    }
+    return {
+        "trial_name": state["trial_name"],
+        "trial_id": state["trial_id"],
+        "started_at": state["created_at"],
+        "ended_at": state["finished_at"],
+        "thinking": (
+            "thinking enabled" if state["thinking"] == "enabled" else "not enabled"
+        ),
+        "ratings": [
+            {"statement": item["text"], "rating": ratings.get(item["id"])}
+            for item in state["statements"]
+        ],
+        "agent_message": {
+            "agent_name": state["agent_name"],
+            "message": accepted["content"] if accepted is not None else None,
+            "thinking": (
+                accepted["reasoning_content"] if accepted is not None else None
+            ),
+            "message_token_count": (
+                accepted["token_counts"]["message_output_tokens"]
+                if accepted is not None
+                else None
+            ),
+            "thinking_token_count": (
+                accepted["token_counts"]["thinking_tokens"]
+                if accepted is not None
+                else None
+            ),
+        },
+        "inputs": {filename: state["inputs"][part] for part, filename in FILES.items()},
+    }
 
 
-RecordDumper.add_representer(str, _string)
+def filename(trial_name: str, trial_id: str) -> str:
+    """Build a bounded filename from the readable trial name followed by its ID."""
+    prefix = "".join(
+        char if char.isprintable() and char not in '<>:"/\\|?*' else "_"
+        for char in trial_name
+    )
+    prefix = prefix.strip(" .").encode("utf-8")[:180].decode("utf-8", errors="ignore")
+    prefix = prefix.rstrip(" .") or "trial"
+    return prefix + "_" + trial_id + ".json"
 
 
 def _sync_directory(path: Path) -> None:
+    """Flush directory entries after creating or replacing a file."""
     descriptor = os.open(str(path), os.O_RDONLY)
     try:
         os.fsync(descriptor)
@@ -48,7 +95,8 @@ def _create_directory(path: Path) -> None:
     _sync_directory(path.parent)
 
 
-def _write_yaml(path: Path, data: Dict[str, Any]) -> None:
+def _write_json(path: Path, data: Dict[str, Any]) -> None:
+    """Atomically replace a snapshot and persist its file and directory data."""
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -59,20 +107,15 @@ def _write_yaml(path: Path, data: Dict[str, Any]) -> None:
             delete=False,
         ) as stream:
             temporary = Path(stream.name)
-            yaml.dump(
-                data,
-                stream,
-                Dumper=RecordDumper,
-                allow_unicode=True,
-                sort_keys=False,
-            )
+            json.dump(data, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(str(temporary), str(path))
         _sync_directory(path.parent)
-    except (OSError, yaml.YAMLError, RecursionError):
+    except (OSError, TypeError, ValueError, RecursionError):
         raise RatingError(
-            "Cannot save a trial or score file. Stopped; retain the last saved snapshot."
+            "Cannot save the trial file. Stopped; retain the last saved snapshot."
         ) from None
     finally:
         if temporary is not None:
@@ -82,52 +125,13 @@ def _write_yaml(path: Path, data: Dict[str, Any]) -> None:
                 pass
 
 
-def save_scores(
-    log_path: Path, state: Dict[str, Any], attempt: Dict[str, Any], key: str
-) -> Path:
-    """Export only the requested metadata and statement/score pairs for one call."""
-    number = attempt["number"]
-    if type(number) is not int or number < 1:
-        raise RatingError("Cannot export scores without a valid call number.")
-    path = (
-        log_path.parent
-        / "scores"
-        / (log_path.stem + ".attempt-" + str(number) + ".yaml")
-    )
-    by_id = {}
-    for item in attempt.get("ratings") or []:
-        score = item["score"]
-        # Only historical format-1 exports translate numbers. New API answers
-        # must already contain exact text labels to pass response validation.
-        if state.get("format_version") == 1 and type(score) is int and 1 <= score <= 5:
-            score = LIKERT_RESPONSES[score - 1]
-        if not isinstance(score, str) or score not in LIKERT_RESPONSES:
-            raise RatingError("Cannot export an invalid Likert response.")
-        by_id[item["id"]] = score
-    data = {
-        "trial_id": state["trial_id"],
-        "created_at": attempt["started_at"],
-        "status": "expired" if state["status"] == "expired" else attempt["status"],
-        "model": state["request"]["model"],
-        "scores": [
-            {"statement": item["text"], "score": by_id.get(item["id"])}
-            for item in state["statements"]
-        ],
-    }
-    ensure_no_secret(str(path), key)
-    ensure_no_secret(data, key)
-    try:
-        _create_directory(path.parent)
-    except OSError:
-        raise RatingError("Cannot create the separate scores directory.") from None
-    _write_yaml(path, data)
-    return path
-
-
 class TrialStore:
-    def __init__(self, output_dir: Path, trial_id: str, key: str):
+    """Reserve and maintain a single named JSON file for an independent trial."""
+
+    def __init__(self, output_dir: Path, trial_name: str, trial_id: str, key: str):
+        """Reserve a unique owner-only file after checking its complete path."""
         self.key = key
-        self.path = output_dir / (trial_id + ".yaml")
+        self.path = output_dir / filename(trial_name, trial_id)
         ensure_no_secret(str(self.path), key)
         try:
             _create_directory(output_dir)
@@ -139,30 +143,12 @@ class TrialStore:
             raise RatingError("Cannot reserve a unique trial file.") from None
 
     def save(self, state: Dict[str, Any]) -> None:
+        """Timestamp and check the full state before saving its JSON projection."""
         state["updated_at"] = now()
+        if (
+            state["status"] in ("completed", "failed", "interrupted")
+            and state["finished_at"] is None
+        ):
+            state["finished_at"] = state["updated_at"]
         ensure_no_secret(state, self.key)
-        # Preserve the complete log before producing any derived score files.
-        _write_yaml(self.path, state)
-        for attempt in state["attempts"]:
-            if attempt["status"] != "pending":
-                save_scores(self.path, state, attempt, self.key)
-
-    def backup(self, attempt: int) -> Path:
-        path = (
-            self.path.parent
-            / "backups"
-            / (self.path.stem + ".attempt-" + str(attempt) + ".yaml")
-        )
-        try:
-            _create_directory(path.parent)
-            descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(self.path.read_bytes())
-                stream.flush()
-                os.fsync(stream.fileno())
-            _sync_directory(path.parent)
-        except OSError:
-            raise RatingError(
-                "Cannot durably back up the rejected attempt; no retry."
-            ) from None
-        return path
+        _write_json(self.path, snapshot(state))
