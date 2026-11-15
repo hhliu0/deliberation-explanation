@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -21,6 +22,7 @@ GENERATION = {
 }
 PEER_LIMIT = 512
 FORMAT_VERSION = 1
+RESUME_TARGET = 20
 
 
 def now() -> str:
@@ -198,6 +200,41 @@ def _reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> P
     return path
 
 
+def _chat_path(chat_id: str, output_dir: Path) -> Path:
+    reference = chat_id.strip()
+    if not reference:
+        raise DialogueError("Enter a chat ID or saved JSON path.")
+    if Path(reference).suffix.lower() == ".json":
+        return Path(reference)
+    try:
+        identifier = uuid.UUID(reference).hex
+    except ValueError:
+        raise DialogueError("Enter a valid chat ID or saved JSON path.") from None
+    return output_dir / (identifier + ".json")
+
+
+@contextmanager
+def _chat_lock(path: Path):
+    """Prevent two local commands from overwriting the same conversation."""
+    lock = path.with_suffix(path.suffix + ".lock")
+    try:
+        descriptor = os.open(str(lock), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise DialogueError(
+            "This chat is locked by another command. If that process has exited, "
+            "remove the adjacent .json.lock file before resuming."
+        ) from None
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(str(os.getpid()) + "\n")
+        yield
+    finally:
+        try:
+            lock.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def _read_state(path: Path) -> Dict[str, Any]:
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
@@ -222,6 +259,8 @@ def _read_state(path: Path) -> Dict[str, Any]:
         if not isinstance(state["messages"], list) or not isinstance(
             state["attempts"], list
         ):
+            raise ValueError()
+        if not isinstance(state.get("interruption_notes", []), list):
             raise ValueError()
         attempts = {}
         for attempt in state["attempts"]:
@@ -358,15 +397,20 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
 def _execute(
     state: Dict[str, Any], path: Path, keys: Dict[str, str], emit: Callable[[str], None]
 ) -> Path:
-    emit("Trial ID: " + state["trial_id"])
-    emit("Saved trial: " + str(path.resolve()))
     pending = None
     interrupted = False
     try:
-        while (
-            len(state["messages"]) - state["initial_message_count"]
-            < state["new_message_limit"]
-        ):
+        _save(path, state, keys)
+        emit("Chat ID: " + state["trial_id"])
+        emit("Saved trial: " + str(path.resolve()))
+        emit(
+            "Progress: "
+            + str(len(state["messages"]))
+            + "/"
+            + str(state["target_message_count"])
+            + " messages"
+        )
+        while len(state["messages"]) < state["target_message_count"]:
             agent = AGENTS[len(state["messages"]) % 2]
             pending = {
                 "message_id": uuid.uuid4().hex,
@@ -413,6 +457,13 @@ def _execute(
                     + ", thinking="
                     + str(record["word_counts"]["thinking"])
                 )
+                emit(
+                    "Progress: "
+                    + str(len(state["messages"]))
+                    + "/"
+                    + str(state["target_message_count"])
+                    + " messages"
+                )
                 pending = None
             except api.APIError as error:
                 pending["status"] = "unknown" if error.uncertain else "error"
@@ -449,6 +500,23 @@ def _execute(
             pending["status"] = "unknown"
             pending["error_code"] = "interrupted_request"
         state["status"] = "paused"
+        state.setdefault("interruption_notes", []).append(
+            {
+                "stopped_at": now(),
+                "after_message_count": len(state["messages"]),
+                "after_message_id": (
+                    state["messages"][-1]["message_id"] if state["messages"] else None
+                ),
+                "pending_message_id": (
+                    pending["message_id"]
+                    if pending is not None and pending["status"] == "unknown"
+                    else None
+                ),
+                "remark": "Stopped here by Ctrl+C after "
+                + str(len(state["messages"]))
+                + " accepted messages.",
+            }
+        )
         _save(path, state, keys)
         emit(
             "\nPaused by Ctrl+C. An interrupted request may still be billed by DeepSeek."
@@ -496,37 +564,48 @@ def run_dialogue(
         },
         "new_message_limit": max_messages,
         "initial_message_count": 0,
+        "target_message_count": max_messages,
         "messages": [],
         "attempts": [],
+        "interruption_notes": [],
     }
     api.ensure_no_keys(state, keys)
     path = _reserve(output_dir, state, keys)
-    return _execute(state, path, keys, emit)
+    with _chat_lock(path):
+        return _execute(state, path, keys, emit)
 
 
 def resume_dialogue(
-    run_path: Path,
-    max_messages: int,
+    chat_id: str,
     keys_file: Path,
     output_dir: Path,
     emit: Callable[[str], None],
 ) -> Path:
-    _check_limit(max_messages)
-    keys = api.load_keys(keys_file)
-    state = _read_state(run_path)
-    api.ensure_no_keys(state, keys)
-    state["parent_trial_id"] = state["trial_id"]
-    state["trial_id"] = uuid.uuid4().hex
-    state["created_at"] = now()
-    state["status"] = "running"
-    state["initial_message_count"] = len(state["messages"])
-    state["new_message_limit"] = max_messages
-    for attempt in state["attempts"]:
-        if attempt["status"] == "in_flight":
-            attempt["status"] = "unknown"
-            attempt["error_code"] = "previous_process_ended"
-    path = _reserve(output_dir, state, keys)
-    return _execute(state, path, keys, emit)
+    path = _chat_path(chat_id, output_dir)
+    with _chat_lock(path):
+        state = _read_state(path)
+        count = len(state["messages"])
+        if count >= RESUME_TARGET:
+            emit(
+                "Chat already has "
+                + str(count)
+                + " messages; target is 20. No API requests made."
+            )
+            emit("Saved chat: " + str(path.resolve()))
+            return path
+        keys = api.load_keys(keys_file)
+        api.ensure_no_keys(state, keys)
+        state["status"] = "running"
+        state["resumed_at"] = now()
+        state["initial_message_count"] = count
+        state["new_message_limit"] = RESUME_TARGET - count
+        state["target_message_count"] = RESUME_TARGET
+        state.setdefault("interruption_notes", [])
+        for attempt in state["attempts"]:
+            if attempt["status"] == "in_flight":
+                attempt["status"] = "unknown"
+                attempt["error_code"] = "previous_process_ended"
+        return _execute(state, path, keys, emit)
 
 
 def inspect_run(
@@ -534,8 +613,16 @@ def inspect_run(
 ) -> None:
     state = _read_state(run_path)
     emit(
-        "Trial: " + state["trial_id"] + " (" + str(state.get("status", "unknown")) + ")"
+        "Chat: " + state["trial_id"] + " (" + str(state.get("status", "unknown")) + ")"
     )
+    for note in state.get("interruption_notes", []):
+        if isinstance(note, dict):
+            emit(
+                "Interruption: "
+                + str(note.get("remark", "Stopped here."))
+                + " At: "
+                + str(note.get("stopped_at", "unknown"))
+            )
     for number, attempt in enumerate(state["attempts"], 1):
         emit(
             "\nRequest "

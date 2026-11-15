@@ -110,3 +110,41 @@ No additional requests, automated test suite, or local test pipeline were added.
 - Lead used the host's existing model setting. Exact lead model/effort and total
   elapsed time, token usage, and cost across agents are not exposed here and are
   recorded as unknown. No model cost or quality comparison is claimed.
+
+## In-place resume to 20 — 2026-11-15
+
+The user replaced continuation-file behavior with in-place continuation: enter a
+chat ID, keep its existing `trial_id` and JSON path, and stop at 20 total accepted
+messages or on Ctrl+C. Resume also accepts a saved JSON path. The `run` command's
+initial message limit is unchanged; resume's former additional-message option
+is removed. Already-complete chats make no API calls and do not load credentials.
+
+Ctrl+C appends a local `interruption_notes` entry recording the timestamp, message
+count, last accepted message ID, pending message ID when applicable, and a remark.
+Notes survive later resumptions and are excluded from requests to both agents.
+An adjacent exclusive lock prevents concurrent commands from overwriting a chat;
+clean exit, errors, and Ctrl+C release it. Abrupt process termination can leave a
+stale lock containing the process ID; the README explains its recovery.
+
+Recovery baseline: `1254ccd`, with a clean tracked working tree before this work.
+The four-message private JSON's starting SHA-256 was
+`f11d01575eb1ba38b63a96befdfa9a9bec70e1fd336b41bc34f1ffe112c22dec`.
+
+Verification before the live continuation:
+
+- `PYTHONPYCACHEPREFIX=/private/tmp/deepseek-dialogue-pycache python3 -m py_compile deepseek_dialogue/cli.py deepseek_dialogue/engine.py`: both changed modules passed.
+- `python3 -m black --check deepseek_dialogue`: 5 files unchanged, passed.
+- `python3 -m deepseek_dialogue resume --help`: passed and describes optional ID
+  input; no additional-message flag appears for resume.
+- `git diff --check`: passed.
+- Eight one-off offline scenarios passed using temporary JSON files and a
+  substituted completion function: 4→20 (16 calls), 19→20 (1 call), already20
+  (no key load/call/file change), Ctrl+C with a saved message and pending request,
+  resuming after that interruption, interruption during initial terminal output,
+  rejection of a concurrent lock, and prompted chat-ID forwarding.
+- These checks made zero live API calls, created no persistent test files, and
+  added no test pipeline. Temporary fixtures were automatically removed.
+- An independent `gpt-6.1-sol` / xhigh review checked integration and interruption
+  behavior. A startup interruption gap was found and fixed; follow-up review
+  reported no remaining actionable findings. CLI/docs work used
+  `gpt-6.1-sol` / medium. Total usage, cost, and elapsed time are unknown.

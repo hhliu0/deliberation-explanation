@@ -27,6 +27,10 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
         default=20,
         help="number of NEW accepted messages to generate (default: 20)",
     )
+    _add_storage_options(parser)
+
+
+def _add_storage_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--keys-file",
         type=Path,
@@ -68,10 +72,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_run_options(run)
 
     resume = commands.add_parser(
-        "resume", help="continue a saved run with additional accepted messages"
+        "resume", help="continue a saved chat to 20 total accepted messages"
     )
-    resume.add_argument("run_path", type=Path)
-    _add_run_options(resume)
+    resume.add_argument(
+        "chat_id",
+        nargs="?",
+        help="chat/trial ID or saved JSON path (prompted when omitted)",
+    )
+    _add_storage_options(resume)
 
     inspect = commands.add_parser("inspect", help="read a saved run without API calls")
     inspect.add_argument("run_path", type=Path)
@@ -96,9 +104,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 emit=print,
             )
         elif args.command == "resume":
+            chat_id = args.chat_id
+            if chat_id is None:
+                try:
+                    chat_id = input("Chat ID: ")
+                except EOFError:
+                    raise DialogueError("No chat ID supplied.") from None
+            chat_id = chat_id.strip()
+            if not chat_id:
+                raise DialogueError("Chat ID cannot be empty.")
             engine.resume_dialogue(
-                run_path=args.run_path,
-                max_messages=args.max_messages,
+                chat_id=chat_id,
                 keys_file=args.keys_file,
                 output_dir=args.output_dir,
                 emit=print,

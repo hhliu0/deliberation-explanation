@@ -66,17 +66,27 @@ saved locally and never added to either agent's conversation context.
 
 ## Saved runs
 
-The default is **20 new accepted messages**, both when starting and when resuming.
-Use `--max-messages` to choose a positive count. A resumed run preserves its
-original prompts, models, accepted history, and next speaker. Resume writes a
-new trial file linked to the original, leaving the original file intact. Every
-start or resume creates a unique `trial_id`; a continuation also records its
-`parent_trial_id`.
+Starting a run defaults to **20 accepted messages**; `run --max-messages` can
+choose another positive count, such as the four-message handshake above.
+Resuming always targets **20 total accepted messages**, including saved history.
+For example, resuming a chat with four accepted messages generates up to 16 more.
+Resume has no `--max-messages` option. It preserves the original prompts, models,
+accepted history, and next speaker.
+
+The saved `trial_id` is the chat ID. Resume continues that same ID and updates
+the same JSON file in place; it does not create another ID or trial file. Enter
+the same ID again to resume after another interruption. Existing saved JSON
+paths also work. If the chat already has at least 20 accepted messages, resume
+prints its current path without making API calls or modifying the record.
 
 ```sh
 python3 -m deepseek_dialogue inspect runs/TRIAL_ID.json
 python3 -m deepseek_dialogue inspect runs/TRIAL_ID.json --show-thinking
-python3 -m deepseek_dialogue resume runs/TRIAL_ID.json --max-messages 20
+python3 -m deepseek_dialogue resume
+# Enter the chat ID at the "Chat ID:" prompt.
+python3 -m deepseek_dialogue resume CHAT_ID
+# Legacy saved paths also work:
+python3 -m deepseek_dialogue resume runs/TRIAL_ID.json
 ```
 
 Inspection is local and does not make API calls. Thinking is hidden during normal
@@ -91,17 +101,28 @@ thinking and usage. Each attempt's `response` stores `content`,
 `reasoning_content`, the full raw API `usage` object, and
 `word_counts: {"message": ..., "thinking": ...}`. Word counts use
 whitespace-separated words; a missing or non-text field has a null count.
-Reports compute usage and word counts per agent across the full saved history
-and separately for the current trial. API usage and computed word counts remain
-distinct; word counts are not token counts.
+Reports show message and thinking word counts per response, with token usage
+totals per agent and for the whole chat. API usage and computed word counts
+remain distinct; word counts are not token counts.
 
 Override storage or credential file paths with `--output-dir` and `--keys-file`
-on `run` or `resume`. Custom output directories outside `runs/` are not
-automatically ignored by Git; keep private artifacts out of commits. The default
-ignore rules cover the standard logs in `runs/`.
+on `run` or `resume`. Resume looks up an entered ID in `--output-dir`; when given
+a JSON path, it updates that file directly. Custom output directories outside
+`runs/` are not automatically ignored by Git; keep private artifacts out of
+commits. The default ignore rules cover the standard logs in `runs/`.
+
+An adjacent `.json.lock` file prevents concurrent commands from editing the same
+chat. Normal exits, errors, and Ctrl+C remove it. Abrupt termination can leave a
+stale lock; check its recorded process ID and confirm that process has exited
+before deleting the lock and resuming.
 
 Normal completion exits with status `0`; a paused run or error exits with `1`;
-Ctrl+C exits with `130`. Inspect the saved record before resuming a paused run.
+Ctrl+C saves progress and exits with `130`. The JSON record also retains a local
+`interruption_notes` entry marking where the chat stopped, including the time,
+accepted message count, message IDs, and a remark. These notes persist across
+resumes and are never sent to either agent. A resumed chat continues until it
+reaches 20 accepted messages or you press Ctrl+C; a rejected response or provider
+error also pauses safely. Inspect the saved record before resuming a paused run.
 
 Prompts and accepted dialogue are sent to DeepSeek. Saved run records contain
 the prompts, dialogue, reasoning, and usage, so treat them as private research
