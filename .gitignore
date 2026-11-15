@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+keys.local.env
+*.local.env
+runs/
+*.local.txt
+Individual research note.docx
