@@ -468,3 +468,79 @@ are retained without estimation. This live call verifies direct text-label
 responses and automatic separate score-file creation, but not nonzero reasoning
 generation or retry/failure behavior. No code changes or extra requests were
 needed. Automated test-suite cases remain zero; validation used real artifacts.
+
+### Thinking-mode investigation and fix — 2026-11-15
+
+The user asked why reasoning remained zero, requested a fix if needed, and asked
+for a deeper trace of the enabled/disabled pipeline using earlier successful
+runs. Starting state was clean on `codex/persona-ratings` at `5910d50`, which is
+the recovery baseline. No credentials, provider configuration, development
+tools, model choices, or security controls were changed.
+
+The lead and an independent bounded read-only trace (`gpt-6-luna`, high effort)
+confirmed that argparse's enabled value reaches `run`, then `build_payload`,
+then the raw urllib JSON body unchanged. The application uses no OpenAI SDK;
+there is no `extra_body` nesting step. Both earlier rating logs explicitly sent
+top-level `thinking: {type: enabled}` and `reasoning_effort: high`. Their raw
+responses explicitly reported zero reasoning tokens and empty reasoning text;
+the enabled-mode accounting path did not substitute zero for missing usage.
+
+The earlier dialogue trial used the same `deepseek-flash` model, high effort,
+and 8,192 generation budget. Its first four responses reported 139, 359, 462,
+and 195 reasoning tokens respectively. That pipeline did not set
+`response_format`. Ratings added forced JSON-object mode. This request difference
+was investigated as a hypothesis rather than assuming the toggle was broken.
+
+Official DeepSeek thinking and Chat Completions documentation confirmed the
+top-level mode/effort parameters and reasoning usage field. They did not establish
+that JSON mode would disable thinking. Firecrawl retrieval was unavailable due
+to exhausted credits; official documentation was read through web browsing.
+No private prompt text or credentials were sent in documentation searches.
+
+The fix omits `response_format` only when thinking is enabled; disabled retains
+JSON-object mode. The final answer remains subject to the same JSON prompt,
+strict schema/Likert validation, 512-message-token bound, and single-retry rules.
+The code change is restricted to `build_payload` and its explanatory comment.
+
+Two live calls through the normal command verified the repair:
+
+```sh
+env -u DEEPSEEK_API_KEY .venv/bin/python -u -m deepseek_ratings --personas inputs/personas.local.yaml --statements inputs/statements.local.yaml --persona skeptic --thinking enabled --keys-file ratings.local.env
+env -u DEEPSEEK_API_KEY .venv/bin/python -u -m deepseek_ratings --personas inputs/personas.local.yaml --statements inputs/statements.local.yaml --persona skeptic --thinking disabled --keys-file ratings.local.env
+```
+
+Both exited `0` after one request each, with five accepted Likert scores and
+automatic separate score YAMLs. No retries or additional diagnostic requests
+were made.
+
+| Mode | Trial ID | Input tokens | Message tokens | Thinking tokens |
+| --- | --- | ---: | ---: | ---: |
+| Enabled | `40937356888f462a8454700075b8d4cd` | 1,215 | 66 | 1,046 |
+| Disabled | `61cb274609234164aeafb6b40115ac88` | 1,212 | 62 | 0 |
+
+The enabled result contains 5,313 characters of returned reasoning and an
+explicit provider reasoning-token count of 1,046. The disabled result has no
+reasoning text; its provider omitted the reasoning breakdown, which the existing
+explicit-disabled accounting rule correctly treats as zero. The old failed-to-
+think rating responses and both new responses have the same provider system
+fingerprint. No claim about the provider's internal implementation is made.
+
+Actual-artifact verification confirmed that the repaired enabled request is
+exactly equal to the prior text-Likert request after removing only
+`response_format`: messages, model, thinking type, effort, and budget match.
+Both CLI modes produced their intended saved requests with identical persona
+and statement content and fresh two-message contexts. Revalidation of raw
+responses, token arithmetic/totals, five scores, exact score-export fields,
+matching statement/score pairs, mode `600`, and credential exclusion passed.
+Full logs are under `runs/ratings/` and paired files under `runs/ratings/scores/`.
+Previous trial logs were not rewritten during diagnosis.
+
+`python3 -m black --check deepseek_ratings/engine.py` reported one unchanged file;
+`PYTHONPYCACHEPREFIX=/private/tmp/deepseek-ratings-pycache .venv/bin/python -m py_compile deepseek_ratings/engine.py`
+and `git diff --check` passed. Independent read-only `gpt-6-astra` / high review
+found no blocking issue and confirmed unchanged toggle values, generation
+budgets, fresh context, validation, and backup-before-retry ordering. The lead
+checked the Luna trace against both code and real artifacts; Luna did not provide
+final quality approval. No simulated model runner, test suite, or local trial
+pipeline was added; automated test-suite count remains zero. Model/review total
+usage and cost are unavailable; no model-routing comparison is claimed.

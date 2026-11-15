@@ -92,6 +92,16 @@ formats. The user message contains the entire statement list in its supplied
 order. Both exact messages and settings are stored in every trial. Local IDs,
 timestamps, trial history, and reasoning are never added to model context.
 
+Thinking-enabled requests deliberately omit the API's `response_format` field.
+Live checks found zero reasoning with forced JSON-object mode; removing only
+that setting restored nonempty reasoning with the same persona, statements,
+model, and thinking settings. The prompt still requests JSON, and the existing
+parser and schema checks enforce it before acceptance. Disabled requests retain
+`response_format: {type: json_object}`. This is an observed compatibility issue
+for this configuration, not a claim that all DeepSeek JSON requests behave alike.
+Both modes were verified live after the fix: enabled returned 1,046 thinking
+tokens, while disabled returned zero. See `TASK_EVIDENCE.md` for the records.
+
 There is no application input-token cap, truncation, or automatic batching.
 DeepSeek's context window still applies. Very long lists may require more output
 than the 512-token message limit; the tool reports failure rather than silently

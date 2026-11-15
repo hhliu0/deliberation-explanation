@@ -46,11 +46,14 @@ def build_payload(
         ],
         "thinking": {"type": thinking},
         "max_tokens": 8192 if thinking == "enabled" else 512,
-        "response_format": {"type": "json_object"},
         "stream": False,
     }
     if thinking == "enabled":
+        # Forced JSON mode suppressed reasoning in live Flash checks. The
+        # prompt and response validator still require JSON in thinking mode.
         payload["reasoning_effort"] = "high"
+    else:
+        payload["response_format"] = {"type": "json_object"}
     return payload
 
 
