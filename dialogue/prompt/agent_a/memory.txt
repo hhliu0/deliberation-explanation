@@ -1,0 +1,5 @@
+[agent_a]
+{"ratings":[{"id":"s1","score":"agree"},{"id":"s2","score":"disagree"},{"id":"s3","score":"disagree"},{"id":"s4","score":"agree"},{"id":"s5","score":"neutral"},{"id":"s6","score":"agree"},{"id":"s7","score":"disagree"},{"id":"s8","score":"strongly disagree"},{"id":"s9","score":"strongly agree"},{"id":"s10","score":"neutral"},{"id":"s11","score":"agree"},{"id":"s12","score":"disagree"}]}
+
+[agent_b]
+{"ratings":[{"id":"s1","score":"disagree"},{"id":"s2","score":"agree"},{"id":"s3","score":"strongly agree"},{"id":"s4","score":"agree"},{"id":"s5","score":"neutral"},{"id":"s6","score":"strongly agree"},{"id":"s7","score":"neutral"},{"id":"s8","score":"strongly disagree"},{"id":"s9","score":"strongly agree"},{"id":"s10","score":"disagree"},{"id":"s11","score":"disagree"},{"id":"s12","score":"disagree"}]}
