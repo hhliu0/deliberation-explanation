@@ -1,0 +1,494 @@
+"""Dialogue scheduling, strict delivery limits, and local run records."""
+
+import copy
+import json
+import os
+import tempfile
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Tuple
+
+from . import api
+from .api import DialogueError
+
+AGENTS = ("agent_a", "agent_b")
+LABELS = {"agent_a": "Agent A", "agent_b": "Agent B"}
+GENERATION = {
+    "thinking": {"type": "enabled"},
+    "reasoning_effort": "high",
+    "max_tokens": 8192,
+}
+PEER_LIMIT = 512
+FORMAT_VERSION = 1
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _check_limit(value: int) -> None:
+    if not _integer(value) or value == 0:
+        raise DialogueError("The message limit must be a positive integer.")
+
+
+def _read_prompt(path: Path) -> str:
+    try:
+        prompt = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise DialogueError(
+            "Cannot read a starting-prompt file as UTF-8 text."
+        ) from None
+    if not prompt.strip():
+        raise DialogueError("Both starting-prompt files must contain text.")
+    return prompt
+
+
+def _usage(raw: Any) -> Dict[str, Any]:
+    """Keep only known numeric accounting fields, entirely outside prompts."""
+    if not isinstance(raw, dict):
+        return {}
+    result = {}
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    ):
+        if _integer(raw.get(key)):
+            result[key] = raw[key]
+    for group, fields in (
+        ("completion_tokens_details", ("reasoning_tokens", "safety_tokens")),
+        ("prompt_tokens_details", ("cached_tokens",)),
+    ):
+        details = raw.get(group)
+        if isinstance(details, dict):
+            result[group] = {
+                field: details[field]
+                for field in fields
+                if _integer(details.get(field))
+            }
+    return result
+
+
+def _delivery_bound(usage: Dict[str, Any]) -> Optional[int]:
+    prompt = usage.get("prompt_tokens")
+    completion = usage.get("completion_tokens")
+    total = usage.get("total_tokens")
+    reasoning = usage.get("completion_tokens_details", {}).get("reasoning_tokens")
+    if not all(_integer(n) for n in (prompt, completion, total, reasoning)):
+        return None
+    if reasoning > completion or completion > GENERATION["max_tokens"]:
+        return None
+    if total != prompt + completion:
+        return None
+    return completion - reasoning
+
+
+def _response(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
+    record = {"usage": _usage(raw.get("usage"))}
+    for field in ("id", "model", "system_fingerprint"):
+        if isinstance(raw.get(field), str):
+            record[field] = raw[field]
+    choices = raw.get("choices")
+    if not isinstance(choices, list) or len(choices) != 1:
+        return record, "invalid_choices"
+    choice = choices[0]
+    if not isinstance(choice, dict) or not isinstance(choice.get("message"), dict):
+        return record, "invalid_message"
+    message = choice["message"]
+    for field in ("content", "reasoning_content"):
+        if isinstance(message.get(field), str):
+            record[field] = message[field]
+    if isinstance(choice.get("finish_reason"), str):
+        record["finish_reason"] = choice["finish_reason"]
+    if message.get("role") != "assistant" or message.get("tool_calls"):
+        return record, "unexpected_role_or_tool_call"
+    if choice.get("finish_reason") != "stop":
+        return record, "incomplete_response"
+    if not record.get("content", "").strip():
+        return record, "empty_final_message"
+    bound = _delivery_bound(record["usage"])
+    if bound is None:
+        return record, "missing_or_inconsistent_usage"
+    record["non_reasoning_token_bound"] = bound
+    if bound > PEER_LIMIT:
+        return record, "peer_message_exceeds_512_tokens"
+    return record, None
+
+
+def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
+    """Only complete starting instructions and accepted dialogue reach a model."""
+    settings = state["settings"]["agents"][agent]
+    messages = [{"role": "system", "content": settings["prompt"]}]
+    messages.extend(
+        {"role": "assistant", "name": item["sender"], "content": item["content"]}
+        for item in state["messages"]
+    )
+    return {
+        "model": settings["model"],
+        "messages": messages,
+        "thinking": dict(GENERATION["thinking"]),
+        "reasoning_effort": GENERATION["reasoning_effort"],
+        "max_tokens": GENERATION["max_tokens"],
+        "stream": False,
+    }
+
+
+def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
+    state["updated_at"] = now()
+    api.ensure_no_keys(state, keys)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".dialogue-",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            json.dump(state, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(str(temporary), str(path))
+    except OSError:
+        raise DialogueError(
+            "Cannot save the run. No further requests will be made; retain the last saved snapshot."
+        ) from None
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
+def _reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> Path:
+    api.ensure_no_keys(str(output_dir), keys)
+    try:
+        output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = output_dir / (state["run_id"] + ".json")
+        descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+    except OSError:
+        raise DialogueError(
+            "Cannot create a new run file in the output directory."
+        ) from None
+    _save(path, state, keys)
+    return path
+
+
+def _read_state(path: Path) -> Dict[str, Any]:
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict) or state.get("format_version") != FORMAT_VERSION:
+            raise ValueError()
+        if not isinstance(state["run_id"], str):
+            raise ValueError()
+        settings = state["settings"]
+        if (
+            settings["generation"] != GENERATION
+            or settings["peer_max_tokens"] != PEER_LIMIT
+        ):
+            raise ValueError()
+        for agent in AGENTS:
+            agent_config = settings["agents"][agent]
+            for field in ("prompt", "model"):
+                if (
+                    not isinstance(agent_config[field], str)
+                    or not agent_config[field].strip()
+                ):
+                    raise ValueError()
+        if not isinstance(state["messages"], list) or not isinstance(
+            state["attempts"], list
+        ):
+            raise ValueError()
+        attempts = {}
+        for attempt in state["attempts"]:
+            if not isinstance(attempt, dict) or attempt["agent"] not in AGENTS:
+                raise ValueError()
+            if not isinstance(attempt["id"], str) or attempt["id"] in attempts:
+                raise ValueError()
+            if attempt["status"] not in (
+                "in_flight",
+                "unknown",
+                "accepted",
+                "rejected",
+                "error",
+            ):
+                raise ValueError()
+            if "response" in attempt and not isinstance(attempt["response"], dict):
+                raise ValueError()
+            attempts[attempt["id"]] = attempt
+        for index, item in enumerate(state["messages"]):
+            if item["sender"] != AGENTS[index % 2]:
+                raise ValueError()
+            if not isinstance(item["content"], str) or not item["content"].strip():
+                raise ValueError()
+            attempt = attempts[item["attempt_id"]]
+            result = attempt["response"]
+            if (
+                attempt["status"] != "accepted"
+                or attempt["agent"] != item["sender"]
+                or result.get("content") != item["content"]
+                or result.get("finish_reason") != "stop"
+            ):
+                raise ValueError()
+            bound = _delivery_bound(_usage(result.get("usage")))
+            if bound is None or bound > PEER_LIMIT:
+                raise ValueError()
+        return state
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError):
+        raise DialogueError(
+            "Cannot read this run: it is unreadable, incomplete, or incompatible."
+        ) from None
+
+
+def _usage_text(usage: Dict[str, Any]) -> str:
+    def count(value: Any) -> str:
+        return str(value) if _integer(value) else "unknown"
+
+    reasoning = usage.get("completion_tokens_details", {}).get("reasoning_tokens")
+    text = (
+        "Usage (local): input="
+        + count(usage.get("prompt_tokens"))
+        + ", output="
+        + count(usage.get("completion_tokens"))
+        + ", thinking="
+        + count(reasoning)
+        + ", total="
+        + count(usage.get("total_tokens"))
+    )
+    for key, label in (
+        ("prompt_cache_hit_tokens", "cache hit"),
+        ("prompt_cache_miss_tokens", "cache miss"),
+    ):
+        if key in usage:
+            text += ", " + label + "=" + count(usage[key])
+    bound = _delivery_bound(usage)
+    if bound is not None:
+        text += ", non-reasoning bound=" + str(bound)
+    return text
+
+
+def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
+    fields = (
+        "prompt_tokens",
+        "completion_tokens",
+        "reasoning_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    )
+    for agent in (*AGENTS, "all"):
+        attempts = [
+            a for a in state["attempts"] if agent == "all" or a["agent"] == agent
+        ]
+        labels = ("input", "output", "thinking", "total", "cache hit", "cache miss")
+        chunks = []
+        for field, label in zip(fields, labels):
+            known = []
+            for attempt in attempts:
+                usage = _usage(attempt.get("response", {}).get("usage"))
+                value = (
+                    usage.get("completion_tokens_details", {}).get(field)
+                    if field == "reasoning_tokens"
+                    else usage.get(field)
+                )
+                if _integer(value):
+                    known.append(value)
+            missing = len(attempts) - len(known)
+            value_text = str(sum(known)) if known or not attempts else "unknown"
+            if missing and known:
+                value_text += " (+ " + str(missing) + " unknown requests)"
+            chunks.append(label + "=" + value_text)
+        label = "Whole history" if agent == "all" else LABELS[agent]
+        emit(
+            label
+            + " totals (local, "
+            + str(len(attempts))
+            + " requests): "
+            + ", ".join(chunks)
+        )
+
+
+def _execute(
+    state: Dict[str, Any], path: Path, keys: Dict[str, str], emit: Callable[[str], None]
+) -> Path:
+    emit("Saved run: " + str(path.resolve()))
+    pending = None
+    try:
+        while (
+            len(state["messages"]) - state["initial_message_count"]
+            < state["new_message_limit"]
+        ):
+            agent = AGENTS[len(state["messages"]) % 2]
+            pending = {
+                "id": uuid.uuid4().hex,
+                "source_run_id": state["run_id"],
+                "agent": agent,
+                "started_at": now(),
+                "status": "in_flight",
+            }
+            state["attempts"].append(pending)
+            _save(path, state, keys)
+            emit(LABELS[agent] + " is thinking...")
+            try:
+                raw = api.complete(_payload(state, agent), keys[agent])
+                api.ensure_no_keys(raw, keys)
+                record, failure = _response(raw)
+                pending["response"] = record
+                pending["finished_at"] = now()
+                if failure:
+                    pending["status"] = "rejected"
+                    pending["error_code"] = failure
+                    state["status"] = "paused"
+                    _save(path, state, keys)
+                    emit(
+                        "Paused: "
+                        + failure
+                        + ". No message was delivered to the counterpart."
+                    )
+                    emit(_usage_text(record["usage"]))
+                    break
+                pending["status"] = "accepted"
+                state["messages"].append(
+                    {
+                        "sender": agent,
+                        "content": record["content"],
+                        "attempt_id": pending["id"],
+                    }
+                )
+                _save(path, state, keys)
+                emit("\n" + LABELS[agent] + ":\n" + record["content"])
+                emit(_usage_text(record["usage"]))
+                pending = None
+            except api.APIError as error:
+                pending["status"] = "unknown" if error.uncertain else "error"
+                pending["error_code"] = error.code
+                pending["finished_at"] = now()
+                state["status"] = "paused"
+                _save(path, state, keys)
+                emit("Paused: " + str(error))
+                break
+            except DialogueError:
+                # A response containing a credential is never retained, even in diagnostics.
+                if pending is not None and "response" not in pending:
+                    pending["status"] = "error"
+                    pending["error_code"] = "credential_in_response"
+                    state["status"] = "paused"
+                    _save(path, state, keys)
+                raise
+        else:
+            state["status"] = "completed"
+            _save(path, state, keys)
+    except KeyboardInterrupt:
+        if pending is not None and pending["status"] == "in_flight":
+            pending["status"] = "unknown"
+            pending["error_code"] = "interrupted_request"
+        state["status"] = "paused"
+        _save(path, state, keys)
+        emit(
+            "\nPaused by Ctrl+C. An interrupted request may still be billed by DeepSeek."
+        )
+    _summary(state, emit)
+    emit("Run " + state["status"] + ". Saved: " + str(path.resolve()))
+    return path
+
+
+def run_dialogue(
+    agent_a_path: Path,
+    agent_b_path: Path,
+    model_a: str,
+    model_b: str,
+    max_messages: int,
+    keys_file: Path,
+    output_dir: Path,
+    emit: Callable[[str], None],
+) -> Path:
+    _check_limit(max_messages)
+    keys = api.load_keys(keys_file)
+    if not all(
+        isinstance(model, str) and model.strip() for model in (model_a, model_b)
+    ):
+        raise DialogueError("Both agents need a model name.")
+    state = {
+        "format_version": FORMAT_VERSION,
+        "run_id": uuid.uuid4().hex,
+        "parent_run_id": None,
+        "created_at": now(),
+        "status": "running",
+        "settings": {
+            "agents": {
+                "agent_a": {"prompt": _read_prompt(agent_a_path), "model": model_a},
+                "agent_b": {"prompt": _read_prompt(agent_b_path), "model": model_b},
+            },
+            "generation": copy.deepcopy(GENERATION),
+            "peer_max_tokens": PEER_LIMIT,
+        },
+        "new_message_limit": max_messages,
+        "initial_message_count": 0,
+        "messages": [],
+        "attempts": [],
+    }
+    api.ensure_no_keys(state, keys)
+    path = _reserve(output_dir, state, keys)
+    return _execute(state, path, keys, emit)
+
+
+def resume_dialogue(
+    run_path: Path,
+    max_messages: int,
+    keys_file: Path,
+    output_dir: Path,
+    emit: Callable[[str], None],
+) -> Path:
+    _check_limit(max_messages)
+    keys = api.load_keys(keys_file)
+    state = _read_state(run_path)
+    api.ensure_no_keys(state, keys)
+    state["parent_run_id"] = state["run_id"]
+    state["run_id"] = uuid.uuid4().hex
+    state["created_at"] = now()
+    state["status"] = "running"
+    state["initial_message_count"] = len(state["messages"])
+    state["new_message_limit"] = max_messages
+    for attempt in state["attempts"]:
+        if attempt["status"] == "in_flight":
+            attempt["status"] = "unknown"
+            attempt["error_code"] = "previous_process_ended"
+    path = _reserve(output_dir, state, keys)
+    return _execute(state, path, keys, emit)
+
+
+def inspect_run(
+    run_path: Path, show_thinking: bool, emit: Callable[[str], None]
+) -> None:
+    state = _read_state(run_path)
+    emit("Run: " + state["run_id"] + " (" + str(state.get("status", "unknown")) + ")")
+    for number, attempt in enumerate(state["attempts"], 1):
+        emit(
+            "\nRequest "
+            + str(number)
+            + " — "
+            + LABELS[attempt["agent"]]
+            + " ["
+            + attempt["status"]
+            + "]"
+        )
+        record = attempt.get("response", {})
+        if isinstance(record.get("content"), str):
+            emit(record["content"])
+        if show_thinking:
+            emit(
+                "Thinking (local only):\n"
+                + str(record.get("reasoning_content", "Not returned."))
+            )
+        emit(_usage_text(_usage(record.get("usage"))))
+        if isinstance(attempt.get("error_code"), str):
+            emit("Outcome: " + attempt["error_code"])
+    _summary(state, emit)
