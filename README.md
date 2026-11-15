@@ -124,6 +124,11 @@ resumes and are never sent to either agent. A resumed chat continues until it
 reaches 20 accepted messages or you press Ctrl+C; a rejected response or provider
 error also pauses safely. Inspect the saved record before resuming a paused run.
 
+Each continuation also appends a local `resume_notes` entry with the previous
+status, the point at which the conversation had stopped, and the resumption time.
+This preserves earlier boundaries such as a four-message handshake, even after
+the same chat reaches 20 messages. These remarks also stay out of model context.
+
 Prompts and accepted dialogue are sent to DeepSeek. Saved run records contain
 the prompts, dialogue, reasoning, and usage, so treat them as private research
 artifacts. Credentials are not saved in run records. Keep private custom prompt

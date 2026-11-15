@@ -148,3 +148,33 @@ Verification before the live continuation:
   behavior. A startup interruption gap was found and fixed; follow-up review
   reported no remaining actionable findings. CLI/docs work used
   `gpt-6.1-sol` / medium. Total usage, cost, and elapsed time are unknown.
+
+Live continuation command (implementation checkpoint `051d7ba`):
+
+```sh
+env -u DEEPSEEK_API_KEY_A -u DEEPSEEK_API_KEY_B python3 -u -m deepseek_dialogue resume 8275edc469134b8993bef3ecf0975bdc
+```
+
+Exit status 0: 16 additional requests were accepted, producing 20 total messages
+in the existing JSON under the same ID. The original four messages, attempts,
+prompts, creation time, and identifiers were preserved exactly. The original
+four-message JSON was copied to the ignored `runs/backups/` directory before
+continuation. All 20 records passed checks for alternating speakers, matching
+unique message IDs, paired nonempty reasoning, recomputed word counts, and token
+delivery bounds. Request construction excludes all local metadata. Keys remain
+absent from the JSON; the JSON remains ignored and owner-only; no lock remained.
+
+The final small addition records `resume_notes` for ordinary continuation
+boundaries as well as `interruption_notes` for Ctrl+C. The completed live JSON
+was annotated using its actual saved resumption time and original fourth-message
+ID, recording that the chat had previously stopped after four messages. This
+does not claim a Ctrl+C occurred during the live run; none occurred. An ignored
+recovery copy of the completed JSON was retained before this metadata update.
+
+Two final one-off checks passed: the interactive CLI on this completed live chat
+made no key/API calls and left the JSON byte-identical; a temporary four-message
+record retained both a new resumption note and a subsequent simulated Ctrl+C
+note at the correct position. No persistent test files were created. The two
+changed modules compiled, Black reported 5 files unchanged, and `git diff --check`
+passed after the note addition. Independent review of the final note change
+reported no blocking issues.

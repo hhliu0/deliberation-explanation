@@ -262,6 +262,8 @@ def _read_state(path: Path) -> Dict[str, Any]:
             raise ValueError()
         if not isinstance(state.get("interruption_notes", []), list):
             raise ValueError()
+        if not isinstance(state.get("resume_notes", []), list):
+            raise ValueError()
         attempts = {}
         for attempt in state["attempts"]:
             if not isinstance(attempt, dict) or attempt["agent"] not in AGENTS:
@@ -568,6 +570,7 @@ def run_dialogue(
         "messages": [],
         "attempts": [],
         "interruption_notes": [],
+        "resume_notes": [],
     }
     api.ensure_no_keys(state, keys)
     path = _reserve(output_dir, state, keys)
@@ -595,8 +598,22 @@ def resume_dialogue(
             return path
         keys = api.load_keys(keys_file)
         api.ensure_no_keys(state, keys)
+        previous_status = state.get("status", "unknown")
         state["status"] = "running"
         state["resumed_at"] = now()
+        state.setdefault("resume_notes", []).append(
+            {
+                "resumed_at": state["resumed_at"],
+                "after_message_count": count,
+                "after_message_id": (
+                    state["messages"][-1]["message_id"] if state["messages"] else None
+                ),
+                "previous_status": previous_status,
+                "remark": "This chat stopped here at "
+                + str(count)
+                + " accepted messages before continuing toward 20.",
+            }
+        )
         state["initial_message_count"] = count
         state["new_message_limit"] = RESUME_TARGET - count
         state["target_message_count"] = RESUME_TARGET
