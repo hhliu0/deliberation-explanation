@@ -6,8 +6,8 @@ disagreement and permit justified revision. Agreement is an allowed outcome, not
 the success criterion. This is a research-informed starting design; its effects
 have not been measured on this project's models or topics.
 
-Configure both agents in the only two directories under `prompts/`:
-`Agent A/` and `Agent B/`. Edit these files directly; the runner does not maintain
+Configure both agents in the only two directories under `dialogue/prompt/`:
+`agent_a/` and `agent_b/`. Edit these files directly; the runner does not maintain
 separate examples, templates, thinking conditions, or archived input copies.
 See [dialogue usage](dialogue.md) for file formats and generation settings.
 
@@ -53,10 +53,10 @@ the original inputs or creating memory text archives. Thinking and rejected
 responses stay out of model context. New runs read the current input files and
 never automatically load an earlier run's history.
 
-The two input directories are already ignored by Git. Start a discussion with:
+The two input directories are not ignored by Git. Start a discussion with:
 
 ```sh
-python3 -m deepseek_dialogue run --trial-name "deliberation" --enable-thinking --max-messages 6
+python3 -m dialogue.source run --trial-name "deliberation" --enable-thinking --max-messages 6
 ```
 
 Six alternating messages provide three contributions per agent for an initial

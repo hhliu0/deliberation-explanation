@@ -1,23 +1,23 @@
 # Independent agent ratings
 
-`deepseek_ratings` rates a statement list using one selected agent and one API
+`ratings.source` rates a statement list using one selected agent and one API
 key. Each invocation builds a fresh request from five text files and saves one
 ordered JSON result. Agent A and Agent B have separate input folders; a run uses
 only the selected agent. The dialogue and ratings packages remain independent.
 
 ## Inputs and first run
 
-The project contains this editable, Git-ignored input set:
+The project contains this editable input set, intentionally not ignored by Git:
 
 ```text
-prompts ratings/
-  Agent A/
+ratings/prompt/
+  agent_a/
     model-config.txt
     persona.txt
     memory.txt
     statements.txt
     starting-prompt.txt
-  Agent B/
+  agent_b/
     model-config.txt
     persona.txt
     memory.txt
@@ -31,20 +31,21 @@ statement IDs/texts. Initial memory is empty. The original YAML inputs and past
 results remain unchanged. These private text files are not included in a fresh
 clone; create the same files using the formats below when setting up another copy.
 
-Run from the project directory using Python 3.9 or later:
+Run from the project directory using Python 3.9 or later. Default prompt, archive,
+and key paths are anchored to the project location:
 
 ```sh
-python3 -m deepseek_ratings --agent agent_a --trial-name "skeptic ratings" --enable-thinking
-python3 -m deepseek_ratings --agent agent_b --trial-name "extrapolator ratings" --not-enable-thinking
+python3 -m ratings.source --agent agent_a --trial-name "skeptic ratings" --enable-thinking
+python3 -m ratings.source --agent agent_b --trial-name "extrapolator ratings" --not-enable-thinking
 ```
 
 `--agent`, a nonblank `--trial-name`, and exactly one thinking flag are required.
-`--prompts-dir DIR` changes the parent containing the `Agent A` and `Agent B`
+`--prompts-dir DIR` changes the parent containing the `agent_a` and `agent_b`
 folders. `--output-dir DIR` changes the archive destination. The old persona/YAML
 input options and `--thinking` option have been replaced by these arguments.
 The current runtime uses only the standard library. The existing virtual
 environment also works; no dependency installation is needed for this workflow.
-The retained `requirements-ratings.txt` describes the earlier YAML environment.
+The retained `ratings/requirements.txt` describes the earlier YAML environment.
 
 ## The five files and request construction
 
@@ -115,17 +116,21 @@ accepted JSON response string is also saved as the agent's message.
 
 ## Credentials
 
-The ratings command still uses the existing single `DEEPSEEK_API_KEY` in the
-ignored `ratings.local.env`, or a nonblank environment value taking precedence.
-Use `--keys-file FILE` to select another local key file. The credential file must
-be owned by your account with mode `600`; symlinks, nonregular files, duplicate
-or unexpected assignments, and malformed keys are rejected. File contents are
-parsed as literal assignments, never executed. No dialogue key files are read.
-Never place credentials in prompts or command-line arguments.
+Ratings reads `DEEPSEEK_API_KEY_A`, the first agent's key, directly from the
+project's ignored `keys.local.env`. It accepts the optional
+`DEEPSEEK_API_KEY_B` entry but never selects it for ratings, even if lines are
+reordered. The separate `ratings.local.env` has been removed. Ratings does not
+use credential environment overrides; dialogue retains its existing overrides.
 
-The HTTPS endpoint, redirect refusal, timeout, response-size bound, key loading,
-and literal/JSON-escaped credential detection retain their existing behavior.
-Prompts and accepted context are sent only when a trial is explicitly run.
+Use `--keys-file FILE` to select another file in the same A/B assignment format.
+The file must be owned by your account with mode `600`; symlinks, nonregular
+files, duplicate or unknown assignments, and a missing/malformed A key are
+rejected. Values are literal text, never shell code. Never put credentials in
+prompts or command-line arguments.
+
+The HTTPS endpoint, redirect refusal, timeout, response-size bound, and
+literal/JSON-escaped credential detection retain their existing behavior.
+Prompts are sent only when a trial is explicitly run.
 
 ## One request and validation
 
@@ -156,10 +161,11 @@ accounting.
 New results are saved directly under:
 
 ```text
-rating archive/<safe trial name>_<trial ID>.json
+ratings/archive/<safe trial name>_<trial ID>.json
 ```
 
 The folder is Git-ignored and uses mode `700`; result files use mode `600`.
+The program creates the archive folder automatically if it does not exist.
 Unsafe filename punctuation and non-printable characters become underscores;
 outer spaces/dots are removed, the name prefix is capped at 180 UTF-8 bytes,
 and an empty normalized prefix becomes `trial`. The exact name remains in JSON.
@@ -179,7 +185,8 @@ Each JSON contains only these fields in this exact order:
 8. `inputs`: `model-config.txt`, `persona.txt`, `memory.txt`, `statements.txt`,
    `starting-prompt.txt`, in that order, with the original text as each value.
 
-`agent_name` is `Agent A` or `Agent B`, matching the selected folder. Each rating
+`agent_name` is `Agent A` or `Agent B`, corresponding to the selected
+`agent_a` or `agent_b` folder. Each rating
 is the validated Likert text only when the trial completes; otherwise it is
 `null`. Before acceptance, the agent-message fields are `null` except for its
 name. An accepted message is preserved even if a later interruption or save
@@ -199,16 +206,17 @@ information and are not additional JSON fields.
 
 Exit status is `0` for an accepted saved result, `1` for failure, `2` for CLI
 usage errors, and `130` for Ctrl+C. The full state and generated filename are
-checked for credentials before writing. Custom output or prompt directories
-outside the ignored defaults need their own Git exclusion.
+checked for credentials before writing. Custom output directories need their own
+Git exclusion. The default prompt folders are intentionally not ignored; existing
+prompt files remain untracked until explicitly added.
 
 ## Earlier research and verification
 
-Earlier rating inputs remain in `inputs/`. Earlier YAML logs, score exports, and
-backups remain under `runs/ratings/` and `runs/backups/`; they are not converted,
-renamed, or deleted. New runs do not read them automatically. The private
-`prompts ratings/` inputs and `rating archive/` are separate from the dialogue's
-`prompts/` and `Dialogue Archive/`.
+Earlier rating inputs remain in `backups/inputs/`. Earlier YAML logs, score exports, and
+backups remain under `backups/runs/ratings/` and `backups/runs/backups/`; their file contents and filenames are preserved in the relocated
+folders. New runs do not read them automatically. The private
+`ratings/prompt/` inputs and `ratings/archive/` are separate from the dialogue's
+`dialogue/prompt/` and `dialogue/archive/`.
 
 This project has no automated test suite, simulated model runner, or CI. The
 new five-file payload/JSON workflow is checked locally and reviewed independently;
@@ -216,5 +224,7 @@ it has not been exercised with a live provider request. Earlier live YAML-era
 results are documented in [task evidence](task-evidence.md).
 
 The implementation and documentation retain the repository's [MIT License](../LICENSE).
-Existing PyYAML installation/license files for the earlier workflow remain
-unchanged; no packages, tooling, credentials, or provider settings were changed.
+The Python implementation is in `ratings/source/`. Existing PyYAML installation
+and license files remain unchanged; packaging relocated the historical dependency
+manifest without installing or configuring anything. Ratings now uses the shared
+Agent A credential; provider and transport settings remain unchanged.

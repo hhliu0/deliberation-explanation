@@ -5,13 +5,10 @@ __pycache__/
 .env.*
 keys.local.env
 *.local.env
-runs/
-/Dialogue Archive/
-/rating archive/
-/prompts ratings/
+/backups/
+/dialogue/archive/
+/ratings/archive/
 *.local.txt
 Individual research note.docx
 .venv/
 *.local.yaml
-/prompts/Agent A/
-/prompts/Agent B/

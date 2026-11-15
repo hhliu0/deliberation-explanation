@@ -8,6 +8,9 @@ from typing import Optional, Sequence
 from . import engine
 from .api import DialogueError
 
+TOOL_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = TOOL_DIR.parent
+
 
 def positive_int(value: str) -> int:
     """Parse a strictly positive count for argparse."""
@@ -37,21 +40,21 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--keys-file",
         type=Path,
-        default=Path("keys.local.env"),
+        default=PROJECT_DIR / "keys.local.env",
         help="local credentials file (default: keys.local.env)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("Dialogue Archive"),
-        help="directory for saved dialogue runs (default: Dialogue Archive)",
+        default=TOOL_DIR / "archive",
+        help="directory for saved dialogue runs (default: dialogue/archive)",
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Define the dialogue run command and its arguments."""
     parser = argparse.ArgumentParser(
-        prog="deepseek_dialogue",
+        prog="dialogue.source",
         description="Start a new DeepSeek dialogue. Agent A always starts.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
@@ -62,16 +65,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--agent-a",
         type=Path,
-        default=Path("prompts/Agent A"),
+        default=TOOL_DIR / "prompt" / "agent_a",
         metavar="DIR",
-        help="Agent A input directory (default: prompts/Agent A)",
+        help="Agent A input directory (default: dialogue/prompt/agent_a)",
     )
     run.add_argument(
         "--agent-b",
         type=Path,
-        default=Path("prompts/Agent B"),
+        default=TOOL_DIR / "prompt" / "agent_b",
         metavar="DIR",
-        help="Agent B input directory (default: prompts/Agent B)",
+        help="Agent B input directory (default: dialogue/prompt/agent_b)",
     )
     thinking = run.add_mutually_exclusive_group(required=True)
     thinking.add_argument(

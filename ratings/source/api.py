@@ -1,4 +1,4 @@
-"""Single-key credentials and a fixed-endpoint, non-retrying HTTPS transport."""
+"""Shared-file Agent A credentials and a fixed-endpoint, non-retrying transport."""
 
 import http.client
 import json
@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 ENDPOINT = "https://api.deepseek.com/chat/completions"
-KEY_NAME = "DEEPSEEK_API_KEY"
+KEY_NAME = "DEEPSEEK_API_KEY_A"
+KEY_NAMES = (KEY_NAME, "DEEPSEEK_API_KEY_B")
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 
 
@@ -40,49 +41,46 @@ class NoRedirects(urllib.request.HTTPRedirectHandler):
 
 
 def load_key(path: Path) -> str:
-    """Read one environment value or one literal, owner-only file assignment."""
-    value = os.environ.get(KEY_NAME, "").strip()
+    """Read Agent A's literal assignment from the owner-only shared key file."""
+    descriptor = None
+    try:
+        descriptor = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise RatingError("The key file must be a regular, non-symlink file.")
+        if os.name == "posix" and (info.st_mode & 0o077 or info.st_uid != os.getuid()):
+            raise RatingError("The key file must be owned by you with mode 600.")
+        with os.fdopen(descriptor, encoding="utf-8") as stream:
+            descriptor = None
+            lines = stream.read().splitlines()
+    except FileNotFoundError:
+        raise RatingError(
+            "Missing keys.local.env. Fill DEEPSEEK_API_KEY_A locally before running."
+        ) from None
+    except (OSError, UnicodeError):
+        raise RatingError("Cannot safely read the shared key file.") from None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    entries = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, separator, candidate = line.partition("=")
+        name, value = name.strip(), candidate.strip()
+        if not separator or name not in KEY_NAMES or name in entries:
+            raise RatingError("Invalid or duplicate assignment in the shared key file.")
+        if value.startswith(("'", '"')):
+            if len(value) < 2 or value[-1] != value[0]:
+                raise RatingError("Unmatched quote in the shared key file.")
+            value = value[1:-1]
+        entries[name] = value
+    value = entries.get(KEY_NAME, "")
     if not value:
-        descriptor = None
-        try:
-            descriptor = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            info = os.fstat(descriptor)
-            if not stat.S_ISREG(info.st_mode):
-                raise RatingError("The key file must be a regular, non-symlink file.")
-            if os.name == "posix" and (
-                info.st_mode & 0o077 or info.st_uid != os.getuid()
-            ):
-                raise RatingError("The key file must be owned by you with mode 600.")
-            with os.fdopen(descriptor, encoding="utf-8") as stream:
-                descriptor = None
-                lines = stream.read().splitlines()
-        except FileNotFoundError:
-            raise RatingError(
-                "Missing DEEPSEEK_API_KEY. Fill ratings.local.env or set the environment variable."
-            ) from None
-        except (OSError, UnicodeError):
-            raise RatingError("Cannot safely read the local key file.") from None
-        finally:
-            if descriptor is not None:
-                os.close(descriptor)
-        found = False
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            name, separator, candidate = line.partition("=")
-            if not separator or name.strip() != KEY_NAME or found:
-                raise RatingError(
-                    "Expected one DEEPSEEK_API_KEY assignment in the key file."
-                )
-            found = True
-            value = candidate.strip()
-            if value.startswith(("'", '"')):
-                if len(value) < 2 or value[-1] != value[0]:
-                    raise RatingError("Unmatched quote in the key file.")
-                value = value[1:-1]
-    if not value:
-        raise RatingError("DEEPSEEK_API_KEY is empty. Fill it locally before running.")
+        raise RatingError(
+            "DEEPSEEK_API_KEY_A is missing or empty. Fill keys.local.env before running."
+        )
     if any(ord(char) < 33 or ord(char) > 126 for char in value):
         raise RatingError("API keys must be printable ASCII without spaces.")
     return value

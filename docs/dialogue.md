@@ -3,11 +3,12 @@
 A terminal research tool for a dialogue between two DeepSeek agents, using Python
 3.9 or later and the standard library. No package installation is required.
 Agent A always starts, then the agents alternate. Configure the discussion by
-editing the files in `prompts/Agent A/` and `prompts/Agent B/`.
+editing the files in `dialogue/prompt/agent_a/` and `dialogue/prompt/agent_b/`.
 
 ## Credentials and first run
 
-Run commands from this project directory. Add your credentials to the ignored
+Run commands from this project directory. Default prompt, archive, and key paths
+are anchored to the project location. Add your credentials to the ignored
 `keys.local.env` file, keeping it readable and writable only by your account.
 Environment variables are also supported. Never put keys in prompt files or run
 commands containing a literal key.
@@ -27,7 +28,7 @@ has owner-only permissions; keep those permissions if you replace it.
 Start with a four-message handshake to check the live provider interface:
 
 ```sh
-python3 -m deepseek_dialogue run --trial-name "handshake" --enable-thinking --max-messages 4
+python3 -m dialogue.source run --trial-name "handshake" --enable-thinking --max-messages 4
 ```
 
 A four-message live handshake using the earlier complete-prompt format was
@@ -36,7 +37,7 @@ locally but has not yet been exercised against the live provider.
 
 ## Five input files per agent
 
-The `prompts/` folder contains only `Agent A/` and `Agent B/`. Each contains one
+The `dialogue/prompt/` folder contains only `agent_a/` and `agent_b/`. Each contains one
 current copy of these five UTF-8 plain-text files, read once at the start of a new run:
 
 | File | Meaning |
@@ -51,12 +52,12 @@ These are the default input directories. Edit the files in place to configure
 the next run, and choose its thinking mode with the command-line flags below.
 There are no separate
 example, deliberation, thinking, or archived input variants. Both directories are
-ignored by Git because they contain private research inputs. The current local
+not ignored by Git; their existing files remain untracked until explicitly added. The current local
 files use The Skeptic for Agent A, The Extrapolator for Agent B, twelve statements,
 and the existing first-run ratings as memory.
 
 ```sh
-python3 -m deepseek_dialogue run --trial-name "deliberation" --enable-thinking
+python3 -m dialogue.source run --trial-name "deliberation" --enable-thinking
 ```
 
 The optional `--agent-a DIR` and `--agent-b DIR` path overrides remain available;
@@ -102,7 +103,7 @@ original file text.
 For a run with thinking disabled:
 
 ```sh
-python3 -m deepseek_dialogue run --trial-name "handshake" --not-enable-thinking --max-messages 4
+python3 -m dialogue.source run --trial-name "handshake" --not-enable-thinking --max-messages 4
 ```
 
 `inputs.load_agent()` loads the five files. `engine._payload()` assembles the
@@ -145,9 +146,10 @@ Every invocation starts a fresh conversation from the current input files, with
 a new `trial_id` and JSON log. The CLI supports only `run`; resume and inspection
 commands have been removed. Stopped and completed runs cannot be continued in place.
 
-Run records are stored directly in the ignored `Dialogue Archive/` directory as plaintext
+Run records are stored directly in the ignored `dialogue/archive/` directory as plaintext
 JSON snapshots. Open the saved path printed by the command in a text editor to
 review the accepted dialogue and returned reasoning.
+The directory is created automatically if missing, with owner-only permissions.
 
 Each JSON file contains only these fields, written in this order:
 
@@ -192,7 +194,7 @@ are not token counts. Terminal summaries are not saved as a separate report file
 Each new run creates one detailed, owner-only JSON log:
 
 ```text
-Dialogue Archive/TRIAL_NAME_TRIAL_ID.json
+dialogue/archive/TRIAL_NAME_TRIAL_ID.json
 ```
 
 The filename uses a safe version of the trial name followed by its unique ID.
@@ -214,13 +216,13 @@ New runs use the ordered fields above. Superseded prompt files were removed from
 tree; earlier private prompt contents remain in their existing detailed run logs,
 while prior tracked source prompts are recoverable through Git history.
 
-The default output directory is `Dialogue Archive/` in the project directory.
-The retained earlier research chats remain in `runs/dialogue/deliberation/` and
-`runs/dialogue/deliberation-no-thinking/`. Historical bird/egg runs are in
-`runs/backups/dialogue/`.
+The default output directory is `dialogue/archive/` in the project directory.
+The retained earlier research chats remain in `backups/runs/dialogue/deliberation/` and
+`backups/runs/dialogue/deliberation_no_thinking/`. Historical bird/egg runs are in
+`backups/runs/backups/dialogue/`.
 
 Override storage or credential file paths with `--output-dir` and `--keys-file`
-on `run`. Custom output directories outside `Dialogue Archive/` and `runs/` are
+on `run`. Custom output directories outside `dialogue/archive/` and `backups/` are
 not automatically ignored by Git; keep private artifacts out of commits. The
 default ignore rules cover both standard output directories.
 
@@ -235,12 +237,13 @@ accepted dialogue; use `run` with a trial name when ready for a fresh conversati
 
 Prompts and accepted dialogue are sent to DeepSeek. Saved run records contain
 the prompts, dialogue, reasoning, and usage, so treat them as private research
-artifacts. Credentials are not saved in run records. Keep private custom prompt
-files in the ignored `prompts/Agent A/` and `prompts/Agent B/` directories.
+artifacts. Credentials are not saved in run records. The default
+`dialogue/prompt/agent_a/` and `dialogue/prompt/agent_b/` directories are intentionally
+not ignored; choose which prompt files to add to Git.
 
 ## Development and licensing
 
-The dialogue implementation separates execution from its outputs:
+The Python implementation is in `dialogue/source/` and separates execution from its outputs:
 
 | Module | Responsibility |
 | --- | --- |
@@ -255,5 +258,5 @@ API.
 
 The shared source code and documentation use the
 [MIT License](../LICENSE). The existing private research document, local credential
-files, private prompt files, and generated run records are excluded from the
-repository.
+files and generated run records are excluded from Git. Local prompt files are
+not ignored and have not been added by the packaging task.

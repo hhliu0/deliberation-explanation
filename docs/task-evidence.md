@@ -1449,3 +1449,131 @@ can leave such files inside that archive, never an intentional external artifact
 Source inventory found no resume/inspection definitions. Final
 python3 -m black --check deepseek_dialogue deepseek_ratings left all 17 files
 unchanged; git diff --check passed. The lead verified the read-only audit findings.
+
+
+## Package dialogue and ratings under separate folders (2026-11-15)
+
+### Scope, approval, and recovery
+
+The user requested a root containing .venv, backups, dialogue, ratings, docs,
+.gitignore, keys.local.env, LICENSE, and README, with Python files under each
+tool's source folder, inputs under prompt, and results under archive. Git metadata
+remains in .git. Legacy inputs/runs move into backups; project folder names become
+lowercase with underscores. Existing .git/.venv internals are exempt.
+
+Baseline/index were clean at ce2a59b. Work uses codex/package-dialogue-ratings.
+Before moving data, the lead created an owner-only recovery manifest at
+backups/packaging_ce2a59b/move_manifest.json recording the ordered moves, original
+paths, modes, and file hashes. Ten top-level moves and sixteen folder
+normalizations were applied without collisions; all 183 moved file/directory
+entries matched their recorded bytes/modes immediately afterward. Original
+backups were preserved. Finder metadata moved into backups/root_metadata;
+requirements-ratings.txt moved unchanged to ratings/requirements.txt.
+
+The user explicitly answered **"Approve packaging and shared-key migration"**
+after a proposal covering protected-module relocation, path defaults/private
+ignore rules, the ratings shared-key loader, removal of the duplicate credential
+file after verification, and unchanged dependency-manifest relocation. The
+proposal documented import/path/key-selection risks, verification and rollback,
+under the supplied AGENTS.md approval boundary. The user separately requested
+backups in .gitignore, then explicitly requested prompts NOT be ignored.
+
+Both credential files were compared locally without printing values: the old
+rating key equals the shared Agent A key. After new-loader verification and
+independent review, ratings.local.env was deleted. The shared key file's exact
+bytes and 0600 mode were unchanged. No duplicate secret was copied into a backup
+or the recovery manifest. The latter records only the key name needed to recreate
+the retired file on rollback, if restoring the former loader.
+
+Rollback: revert this task's tracked commit and reverse the recorded private/data
+moves in reverse order (tracked source/manifest moves are handled by Git). The
+old rating credential file can be reconstructed from the unchanged shared A key,
+using its former DEEPSEEK_API_KEY assignment and 0600 permissions. Preserve
+checkpoint history and avoid staging restored private data. Historical task
+evidence retains its original paths; the manifest maps current locations.
+
+Shared research use and MIT licensing are unchanged. No third-party source,
+dependency version, installation, tooling configuration, provider configuration,
+or environment setup was added. Existing Black 25.11.0 was used.
+
+### Result
+
+- Root now contains exactly the requested items plus .git. All seventeen Python
+  modules reside in dialogue/source or ratings/source. Package-relative imports
+  work under python3 -m dialogue.source run and python3 -m ratings.source; no
+  compatibility package or Python wrapper was left at the old/root locations.
+- Dialogue and ratings each have prompt/agent_a, prompt/agent_b, and archive.
+  Archive JSON filenames and all existing data contents remain unchanged.
+  Legacy inputs and runs, including old run backups, are under backups.
+  All project folder names use lowercase/underscores; .git/.venv were untouched.
+- CLI defaults are anchored to the installed project location through the source
+  file path: respective prompt/archive directories and the root shared key file.
+  Explicit relative path overrides retain their normal current-directory meaning.
+  Rating selection uses the lowercase agent folder while saved/displayed names
+  remain Agent A/Agent B. Payloads, schemas, execution and terminal summaries are
+  unchanged.
+- Ratings reads DEEPSEEK_API_KEY_A directly from keys.local.env, regardless of
+  assignment ordering. Optional B is allowed but never selected. Environment
+  overrides are no longer used by ratings. Duplicate/unknown assignments and
+  missing/invalid A values fail. Descriptor-based owner/permissions, regular-file,
+  no-symlink/nonblocking, literal quote parsing and printable-ASCII protections
+  remain. Ratings transport and secret guards, and all dialogue key behavior,
+  remain unchanged.
+- /backups/, both archive folders, keys and .venv are ignored. At the user's
+  follow-up request, neither prompt tree is ignored. All twenty pre-existing
+  prompt files remain untracked and are excluded from this task's commit.
+- Both existing storage implementations already create a missing archive
+  automatically, with 0700 on the archive directory and 0600 on files; no new
+  creation pipeline was needed. Atomic temporary files and dialogue locks stay
+  within the archive and are normally cleaned up. Resume/inspection commands
+  remain absent.
+- README and current usage/design instructions now use the packaged commands and
+  paths. Historical task evidence/draft descriptions retain their original paths.
+
+### Verification and review
+
+- python3 -m black dialogue/source/cli.py dialogue/source/__main__.py
+  ratings/source/cli.py: three files unchanged. The credential implementer also
+  formatted/checked ratings/source/api.py. Final
+  python3 -m black --check dialogue/source ratings/source: seventeen unchanged.
+  git diff --check passed.
+- One-off python3 - checks compiled all seventeen modules. Thirteen relocated
+  modules are byte-identical to ce2a59b, including engines, input/response
+  validation, output schemas/storage, and dialogue credentials/transport.
+  The historical dependency manifest is byte-identical. The other four changes
+  are two CLIs, the dialogue entry-point docstring and ratings key loader.
+  Ratings transport/secret guard and error/redirect classes passed two separate
+  byte-identity comparisons by the implementer and AST checks by the reviewer.
+- Both new module help commands and dialogue run --help passed. Direct parser
+  checks verified new defaults, current-directory-independent default paths,
+  two custom-path override cases and eight removed historical-command/flag
+  rejections. Old deepseek_dialogue/deepseek_ratings packages are absent.
+- Four loaded ratings input combinations still exactly match initial dialogue
+  payload construction; four dialogue input loads succeeded at the new locations.
+  No runner or provider was invoked by these direct checks.
+- Credential implementer: twenty-seven synthetic loader checks passed. Lead:
+  seventeen synthetic cases passed for A-only/A+B/reordered and quoted entries,
+  ignored environment overrides, duplicate/unknown/malformed values and rejected
+  missing, overly accessible, directory, and symlink files. Actual shared-loader
+  equality was checked only locally before the approved duplicate-file deletion.
+- Direct storage checks started with two nonexistent nested archive paths; both
+  were created automatically with 0700 directories/0600 files. Only the two JSON
+  files remained, each in its chosen archive; temporary files and dialogue lock
+  were cleaned up. No simulated model runner or real trial was used.
+- Final layout checks verified the exact root set, lowercase/underscore project
+  folders, old locations absent, and all 164 relocated non-source entries still
+  retaining bytes/modes. Twenty prompt paths are unignored and absent from the
+  index; backups, archives, shared credentials, and .venv remain ignored.
+  No credential files exist within backups.
+- Documentation checks parsed eight current module command examples and resolved
+  nine local links. Historical evidence sections were excluded from command
+  rewriting intentionally.
+- Bounded read-only inventory used gpt-6-luna/high. A gpt-6-astra/high implementer
+  owned only ratings/source/api.py. A separate gpt-6-astra/high reviewer checked
+  the complete packaging/security migration and the later prompt-ignore policy,
+  finding no actionable findings or blockers. The lead owned planning, data moves,
+  integration, verification and credential removal. Exact lead model/effort,
+  elapsed time and all usage/cost data are unknown; no routing comparison claimed.
+- Automated suite cases collected/executed: zero, following existing project
+  policy. All direct checks above passed. No live provider call, simulated model
+  runner, installation, push, PR, shared-branch merge or deployment occurred.
