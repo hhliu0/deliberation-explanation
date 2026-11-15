@@ -431,3 +431,40 @@ Verification:
   tooling, or dependencies were added. Direct text responses from a new live
   model call have not been verified. Total model/review usage and cost remain
   unknown.
+
+### Live text-Likert trial — 2026-11-15
+
+The user explicitly requested another live call with the same five statements.
+Preflight confirmed exact equality of all five statement IDs and texts with the
+expired numeric trial. Implementation `e0133a8` was clean before execution.
+The Skeptic and thinking-enabled/high settings were retained; a new UUID and
+fresh two-message request were used.
+
+Executed command:
+
+```sh
+env -u DEEPSEEK_API_KEY .venv/bin/python -u -m deepseek_ratings --personas inputs/personas.local.yaml --statements inputs/statements.local.yaml --persona skeptic --thinking enabled --keys-file ratings.local.env
+```
+
+Exit status `0`: one request, five accepted text Likert responses, no retry.
+Trial ID: `27ec4bd3917449e5af6785c8957d96c9`. Both artifacts were produced by the
+normal command, without a separate backfill:
+
+- `runs/ratings/27ec4bd3917449e5af6785c8957d96c9.yaml`
+- `runs/ratings/scores/27ec4bd3917449e5af6785c8957d96c9.attempt-1.yaml`
+
+A one-off read of the actual artifacts confirmed format version 2, completed
+trial status, one accepted attempt, five valid exact text labels, matching full
+statement texts and score pairs, the exact allowed score-file fields, matching
+call metadata, and equality with the intended fresh request. Revalidating the
+raw response and recomputing aggregate usage passed; message tokens were within
+512. Both files are mode `600`, excluded from Git, and contain no API key.
+The previous numeric trial remains expired. Result values and usage are retained
+in the private artifacts.
+
+DeepSeek again explicitly reported zero thinking tokens and an empty reasoning
+field despite requested thinking-enabled/high settings. These provider values
+are retained without estimation. This live call verifies direct text-label
+responses and automatic separate score-file creation, but not nonzero reasoning
+generation or retry/failure behavior. No code changes or extra requests were
+needed. Automated test-suite cases remain zero; validation used real artifacts.
