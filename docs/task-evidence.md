@@ -929,3 +929,37 @@ or removed, and no new private data copies were created.
   not execute a dialogue trial or simulated model runner. No live API request,
   dependency installation, push, PR, or deployment occurred. Full fresh-run
   execution and provider compatibility were not exercised in this task.
+
+
+## Brief function remarks (2026-11-15)
+
+The user requested a brief explanation for every function in `deepseek_dialogue`.
+All 32 definitions now have one-line docstrings, including the two class methods
+and the nested usage-formatting helper. Added 23 missing docstrings and clarified
+five existing ones; the other four were already suitable. The lead checked each
+description against its implementation. No executable statements, signatures,
+security controls, dependencies, or private files changed. Shared-research use
+and MIT licensing remain unchanged; no external source was reused.
+
+The starting tree/index were clean at `cb9fecd`. Work uses local branch
+`codex/document-dialogue-functions`; reverting this task's commit restores the
+previous remarks. Only the four affected Python modules and this evidence entry
+are included in the commit.
+
+Verification:
+
+- `python3 -m black deepseek_dialogue` and `python3 -m black --check deepseek_dialogue`:
+  all six modules unchanged, passed using existing Black 25.11.0.
+- A one-off `python3 -` AST check recursively inspected all six Python modules:
+  32/32 definitions have nonempty, single-line docstrings. After removing only
+  function docstrings, every module's AST matched its `git show cb9fecd:PATH`
+  baseline exactly. All six modules also passed `compile(...)` syntax checks
+  without bytecode-cache writes.
+- `git diff --check` passed; the lead reviewed the diff for documentation-only scope.
+- A read-only `gpt-6-luna` / `high` inventory independently identified all 32
+  definitions and summarized relevant behavior; the lead verified those findings
+  and owns final acceptance. Lead model/effort, elapsed time, and all usage/cost
+  are unknown. No comparison or savings claim is made.
+- Automated test-suite cases: zero. No runtime tests or live API requests were
+  needed for these docstring-only changes; no test pipeline, tooling setup, push,
+  or deployment was performed.

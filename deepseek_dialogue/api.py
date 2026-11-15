@@ -20,6 +20,7 @@ class DialogueError(Exception):
 
 class APIError(DialogueError):
     def __init__(self, code: str, message: str, uncertain: bool = False):
+        """Store an API error's code, message, and uncertain-outcome flag."""
         super().__init__(message)
         self.code = code
         self.uncertain = uncertain
@@ -27,11 +28,12 @@ class APIError(DialogueError):
 
 class NoRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Reject redirects from the API endpoint."""
         raise APIError("redirect_refused", "DeepSeek redirected the request; stopped.")
 
 
 def load_keys(path: Path) -> Dict[str, str]:
-    """Environment wins; otherwise read literal assignments, never shell code."""
+    """Load both API keys, preferring environment values over literal file entries."""
     values = {}
     for name in KEY_NAMES.values():
         value = os.environ.get(name, "").strip()
@@ -80,7 +82,7 @@ def load_keys(path: Path) -> Dict[str, str]:
 
 
 def ensure_no_keys(value: Any, keys: Dict[str, str]) -> None:
-    """Do not persist or display a credential accidentally placed in other input."""
+    """Reject nested data containing either agent's API key."""
     pending = [value]
     while pending:
         item = pending.pop()
@@ -97,6 +99,7 @@ def ensure_no_keys(value: Any, keys: Dict[str, str]) -> None:
 
 
 def complete(payload: Dict[str, Any], key: str) -> Dict[str, Any]:
+    """Send one DeepSeek request and return its decoded JSON response."""
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         ENDPOINT,

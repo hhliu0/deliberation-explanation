@@ -23,6 +23,7 @@ GENERATION_DISABLED = {"thinking": {"type": "disabled"}, "max_tokens": 512}
 
 
 def _unique_pairs(pairs):
+    """Build a dictionary from JSON key-value pairs, rejecting duplicate keys."""
     result = {}
     for key, value in pairs:
         if key in result:
@@ -32,7 +33,7 @@ def _unique_pairs(pairs):
 
 
 def model_config(text: str, thinking: Optional[str] = None) -> Dict[str, Any]:
-    """Parse API parameters, never executable code or arbitrary payload overrides."""
+    """Validate JSON model settings and apply an optional thinking-mode override."""
     try:
         config = json.loads(text, object_pairs_hook=_unique_pairs)
         if not isinstance(config, dict):
@@ -60,6 +61,7 @@ def model_config(text: str, thinking: Optional[str] = None) -> Dict[str, Any]:
 
 
 def validate_parts(parts: Any) -> None:
+    """Require all five text inputs, allowing only the initial memory to be blank."""
     if not isinstance(parts, dict) or set(parts) != set(FILES):
         raise DialogueError("Each agent needs exactly five input parts.")
     for part, text in parts.items():
@@ -68,6 +70,7 @@ def validate_parts(parts: Any) -> None:
 
 
 def load_agent(directory: Path, thinking: Optional[str] = None) -> Dict[str, Any]:
+    """Read an agent's five files and return validated inputs and model settings."""
     parts = {}
     for part, filename in FILES.items():
         try:

@@ -21,14 +21,17 @@ FORMAT_VERSION = 2
 
 
 def now() -> str:
+    """Return the current UTC time as an ISO 8601 timestamp."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _integer(value: Any) -> bool:
+    """Check for a nonnegative integer, excluding booleans."""
     return type(value) is int and value >= 0
 
 
 def _check_limit(value: int) -> None:
+    """Reject message limits that are not positive integers."""
     if not _integer(value) or value == 0:
         raise DialogueError("The message limit must be a positive integer.")
 
@@ -64,6 +67,7 @@ def _usage(raw: Any) -> Dict[str, Any]:
 def _delivery_bound(
     usage: Dict[str, Any], generation: Optional[Dict[str, Any]] = None
 ) -> Optional[int]:
+    """Return the non-reasoning token bound, or None for invalid usage."""
     generation = GENERATION if generation is None else generation
     usage = _usage(usage)
     prompt = usage.get("prompt_tokens")
@@ -88,6 +92,7 @@ def _delivery_bound(
 def _response(
     raw: Dict[str, Any], generation: Optional[Dict[str, Any]] = None
 ) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Record response details and return any reason it cannot be delivered."""
     generation = GENERATION if generation is None else generation
     record = {
         "word_counts": {"message": None, "thinking": None},
@@ -138,6 +143,7 @@ def _response(
 
 
 def _generation(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
+    """Read an agent's generation settings from a current or legacy run."""
     if state["format_version"] == 1:
         return state["settings"]["generation"]
     config = state["settings"]["agents"][agent]["model_config"]
@@ -145,7 +151,7 @@ def _generation(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
 
 
 def _memory(state: Dict[str, Any], agent: str) -> str:
-    """Rebuild memory exactly once per accepted turn, including the opening turn."""
+    """Combine the agent's initial memory with all accepted, speaker-labeled replies."""
     initial = state["settings"]["agents"][agent]["inputs"]["memory"]
     transcript = "\n\n".join(
         "[" + item["sender"] + "]\n" + item["content"] for item in state["messages"]
@@ -154,7 +160,7 @@ def _memory(state: Dict[str, Any], agent: str) -> str:
 
 
 def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
-    """Assemble five file-backed parts; accepted public replies extend memory."""
+    """Build the API request from one agent's inputs and accepted dialogue."""
     settings = state["settings"]["agents"][agent]
     parts = settings["inputs"]
     model_config = copy.deepcopy(settings["model_config"])  # 1. API settings
@@ -181,6 +187,7 @@ def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
 
 
 def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
+    """Timestamp and check the state for credentials, then atomically save its JSON."""
     state["updated_at"] = now()
     api.ensure_no_keys(state, keys)
     temporary = None
@@ -208,6 +215,7 @@ def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
 
 
 def _reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> Path:
+    """Create a new owner-only run file and save its initial snapshot."""
     api.ensure_no_keys(str(output_dir), keys)
     try:
         output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -339,9 +347,11 @@ def _read_state(path: Path) -> Dict[str, Any]:
 
 
 def _usage_text(usage: Dict[str, Any]) -> str:
+    """Format one response's token usage for local display."""
     usage = _usage(usage)
 
     def count(value: Any) -> str:
+        """Format a valid token count, or mark it as unknown."""
         return str(value) if _integer(value) else "unknown"
 
     reasoning = usage.get("completion_tokens_details", {}).get("reasoning_tokens")
@@ -368,6 +378,7 @@ def _usage_text(usage: Dict[str, Any]) -> str:
 
 
 def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
+    """Display token totals per agent and across all attempts, noting missing counts."""
     fields = (
         "prompt_tokens",
         "completion_tokens",
@@ -411,6 +422,7 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
 def _execute(
     state: Dict[str, Any], path: Path, keys: Dict[str, str], emit: Callable[[str], None]
 ) -> Path:
+    """Alternate agent requests, saving each attempt and stopping on errors or limits."""
     pending = None
     interrupted = False
     try:
@@ -555,6 +567,7 @@ def run_dialogue(
     emit: Callable[[str], None],
     thinking: Optional[str] = None,
 ) -> Path:
+    """Load both agents, create a fresh run record, and execute the dialogue."""
     _check_limit(max_messages)
     agents = {
         "agent_a": inputs.load_agent(agent_a_path, thinking),
@@ -586,6 +599,7 @@ def run_dialogue(
 def inspect_run(
     run_path: Path, show_thinking: bool, emit: Callable[[str], None]
 ) -> None:
+    """Display a saved run's attempts, usage, and optional reasoning without API calls."""
     state = _read_state(run_path)
     emit(
         "Chat: " + state["trial_id"] + " (" + str(state.get("status", "unknown")) + ")"

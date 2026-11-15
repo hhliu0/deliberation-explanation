@@ -21,6 +21,7 @@ def positive_int(value: str) -> int:
 
 
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
+    """Add message-limit, credential-file, and output-directory options."""
     parser.add_argument(
         "--max-messages",
         type=positive_int,
@@ -42,6 +43,7 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Define the run and inspect commands and their arguments."""
     parser = argparse.ArgumentParser(
         prog="deepseek_dialogue",
         description="Start a new DeepSeek dialogue or inspect a saved run. Agent A always starts.",
@@ -82,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Dispatch the requested command and return its process exit status."""
     args = build_parser().parse_args(argv)
     try:
         if args.command == "run":
