@@ -34,11 +34,12 @@ are read by this tool. Credentials never enter prompts or saved trial records.
 
 ## Inputs and use
 
-The prepared private inputs are `inputs/personas.local.yaml` (The Skeptic only)
-and `inputs/statements.local.yaml` (five labeled illustrative sample statements,
-not a validated research instrument). The original Extrapolator is preserved in
-`backups/extrapolator.local.yaml` and is not selected or sent automatically.
-The original pasted attachment is unchanged. These local files are excluded
+The private inputs are `inputs/personas.local.yaml` (The Skeptic),
+`inputs/extrapolator.local.yaml` (The Extrapolator), and
+`inputs/statements.local.yaml` (the current statement list). Select one persona
+file per invocation. The `inputs/expected.*.local.yaml` files are reference
+ratings, not persona inputs to this command. Input files and the original pasted
+attachment are unchanged by repository cleanup. These local files are excluded
 from Git and therefore are not included in another clone.
 
 Personas YAML schema:
@@ -100,7 +101,7 @@ parser and schema checks enforce it before acceptance. Disabled requests retain
 `response_format: {type: json_object}`. This is an observed compatibility issue
 for this configuration, not a claim that all DeepSeek JSON requests behave alike.
 Both modes were verified live after the fix: enabled returned 1,046 thinking
-tokens, while disabled returned zero. See `TASK_EVIDENCE.md` for the records.
+tokens, while disabled returned zero. See [task evidence](task-evidence.md) for the records.
 
 There is no application input-token cap, truncation, or automatic batching.
 DeepSeek's context window still applies. Very long lists may require more output
@@ -133,6 +134,25 @@ it is not UTF-8. The transport has a 16 MiB response safety bound; a response
 exceeding it is retained only up to that bound plus one byte and stops without
 retry. This is not an input-token restriction. Responses containing the actual
 credential are not persisted; the tool stops with a local error instead.
+
+## Existing research runs
+
+The retained twelve-statement batch folders are `runs/ratings/batch-skeptic/`
+and `runs/ratings/batch-extrapolator/`. Their contents are unchanged.
+
+The post-deliberation results are grouped under `runs/ratings/deliberation/`:
+
+- `after-deliberation/`: ratings after the twenty-message thinking-enabled dialogue.
+- `after-deliberation-no-thinking/`: ratings after the twenty-message non-thinking dialogue.
+
+Each folder retains complete logs and its separate `scores/` files. These are
+recorded research artifacts; the rating CLI itself remains stateless and does
+not automatically load dialogue history. The dialogue package is independent.
+
+Superseded six-message ratings, initial five-statement trials, historical
+versions, and redundant summaries are archived separately under `runs/backups/`.
+Archived log fields keep the paths recorded at creation; the cleanup recovery
+manifest records their new locations. `inputs/` is unchanged.
 
 ## Saved YAML and token accounting
 
@@ -215,7 +235,7 @@ or temporary snapshot. No automatic recovery or repeat request occurs.
 The implementation uses the existing Black installation, syntax/help checks,
 actual-input inspection, and independent static review. It adds no local trial
 pipeline, simulated model runner, automated test suite, or CI. Live verification
-is performed only after the user supplies the single key; see `TASK_EVIDENCE.md`
+is performed only after the user supplies the single key; see [task evidence](task-evidence.md)
 for the actual verification status and unexercised failure paths.
 
 PyYAML 6.0.3 is obtained from [PyPI](https://pypi.org/project/PyYAML/6.0.3/) under

@@ -6,8 +6,8 @@ disagreement and permit justified revision. Agreement is an allowed outcome, not
 the success criterion. This is a research-informed starting design; its effects
 have not been measured on this project's models or topics.
 
-Use [Agent A](prompts/deliberation_agent_a.txt) and
-[Agent B](prompts/deliberation_agent_b.txt). Each file contains shared operating
+Use [Agent A](../prompts/deliberation/agent-a.template.txt) and
+[Agent B](../prompts/deliberation/agent-b.template.txt). Each file contains shared operating
 instructions followed by exactly two input sections: the persona and previously
 stored context. The instructions are the same except for identity and the first
 turn. Agent A opens; Agent B responds. Existing bird/egg example prompts remain
@@ -43,12 +43,12 @@ starting prompt and the accepted conversation, not the other's unshared persona
 or stored context. An agent may reveal parts of its context in its replies.
 
 For private material, save filled copies using ignored names such as
-`prompts/deliberation_a.local.txt` and `prompts/deliberation_b.local.txt`. The runner
+`prompts/deliberation/agent-a.local.txt` and `prompts/deliberation/agent-b.local.txt`. The runner
 does not replace placeholders or retrieve memory automatically. After filling
 both copies, the existing command can select them:
 
 ```sh
-python3 -m deepseek_dialogue run --agent-a prompts/deliberation_a.local.txt --agent-b prompts/deliberation_b.local.txt --max-messages 6
+python3 -m deepseek_dialogue run --agent-a prompts/deliberation/agent-a.local.txt --agent-b prompts/deliberation/agent-b.local.txt --max-messages 6
 ```
 
 Six alternating messages provide three contributions per agent for an initial

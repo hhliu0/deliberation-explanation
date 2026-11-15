@@ -544,3 +544,81 @@ checked the Luna trace against both code and real artifacts; Luna did not provid
 final quality approval. No simulated model runner, test suite, or local trial
 pipeline was added; automated test-suite count remains zero. Model/review total
 usage and cost are unavailable; no model-routing comparison is claimed.
+
+## Repository cleanup — 2026-11-15
+
+The user requested separate rating/dialogue wiring, clearer run classifications
+and prompt names, retention of the twenty-message results instead of the older
+after-deliberation set, separate backups, and unchanged inputs/batch folders.
+Existing shared-research use and MIT licensing remain unchanged. Inspection
+found two independent active Python packages, with no abandoned runnable
+pipeline. Dialogue resume/inspect and rating validation/retry remain useful and
+were retained. The different API clients were not merged. Only dialogue CLI
+default paths changed; rating code, APIs, credentials, tooling, and dependencies
+are unchanged.
+
+### Recovery and preserved work
+
+The deliberation prompt task committed as `8bc803f` during initial inspection.
+Cleanup then captured that baseline on `codex/deliberation-prompts`, with an
+empty index and pre-existing unstaged thinking-toggle changes in the dialogue
+CLI and engine. Work continued on `codex/repo-cleanup`. Cleanup staging includes
+only CLI path edits; the pre-existing toggle edits remain uncommitted. The engine
+is byte-identical to its initial working version.
+
+Before editing, 105 source/prompt/run files were preserved in the owner-only
+`runs/backups/repo-cleanup-20261115T125711Z/snapshot.tar.gz`. Adjacent
+`manifest.json` records original hashes/modes, baseline commit, and five input
+hashes. Original staged/unstaged patches are retained. `moves.json` and
+`moved-files.json` record 30 reversible moves and 47 moved files. Restore private
+data using those mappings or the snapshot after reviewing newer work; revert the
+cleanup commit for tracked changes. No research data was permanently erased.
+A duplicate summary entry in the initial move list was caught after its valid
+move, removed from the manifest, and all destinations were verified by hash.
+
+### Organization
+
+- Active conversations: `runs/dialogue/deliberation/` and
+  `runs/dialogue/deliberation-no-thinking/`, with full JSON and transcript YAML.
+- Retained twenty-message ratings: `runs/ratings/deliberation/after-deliberation/`
+  and its sibling `after-deliberation-no-thinking/`, each with full logs/scores.
+- The superseded set contained six-message results, not identical copies. It is
+  archived in `runs/backups/ratings/after-six-messages/`, including its existing
+  rejected-attempt backup. Initial five-statement trials, prior versions,
+  summaries, old bird/egg history, and request captures moved into named folders
+  under `runs/backups/`, outside the active results.
+- All 41 files in the two batch directories, including the incomplete Skeptic
+  record, and all five `inputs/` files are unchanged.
+- Prompts now use explicit bird-first/egg-first example names, agent template
+  names, and persona names within deliberation/non-thinking folders. Their
+  contents and modes are unchanged.
+- README is the entry point; usage, prompt design, and evidence live in `docs/`.
+  Current references were updated; historical evidence retains original paths.
+
+### Verification
+
+- `python3 -m black deepseek_dialogue/cli.py` and
+  `python3 -m black --check deepseek_dialogue/cli.py`: one unchanged file, passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/deepseek-cleanup-pycache .venv/bin/python -m py_compile deepseek_dialogue/cli.py`:
+  the changed module compiled.
+- `python3 -m deepseek_dialogue run --help`,
+  `python3 -m deepseek_dialogue resume --help`, and
+  `.venv/bin/python -m deepseek_ratings --help`: all three passed.
+- Actual-file inspection confirmed all five input hashes, 41 batch file hashes,
+  moved run/prompt hashes and modes, and the unchanged engine. Reversing only
+  the CLI's path substitutions exactly recovers the initial working CLI.
+- Three real saved dialogues (both active conditions and archived bird/egg)
+  passed `inspect_run` without API calls or file mutation. Four retained rating
+  logs each have twenty dialogue messages, twelve statements, and matching score
+  files with the exact allowed fields. Both persona inputs load successfully.
+- CLI defaults resolve existing example files and `runs/dialogue/`. AST checks
+  show no imports between the packages; all twelve current local Markdown links
+  resolve. `git diff --check` passed, and private artifacts remain ignored.
+- Read-only audit used `gpt-6-luna` / high; the lead checked its findings.
+  Independent final review used `gpt-6.1-sol` / xhigh and found no blocking issues,
+  independently checking preservation, run lengths/modes, CLI paths, help,
+  ignore rules, and links. Its documentation caveat about the uncommitted toggle
+  was resolved by describing only the committed default in the new dialogue guide.
+- Automated test-suite cases: zero. No live calls, simulated model trials, test
+  pipeline, installations, push, or deployment. Total model/review usage and cost
+  are unknown; no routing comparison is claimed.

@@ -40,8 +40,8 @@ def _add_storage_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("runs"),
-        help="directory for saved runs (default: runs)",
+        default=Path("runs/dialogue"),
+        help="directory for saved dialogue runs (default: runs/dialogue)",
     )
 
 
@@ -56,16 +56,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--agent-a",
         type=Path,
-        default=Path("prompts/agent_a.txt"),
+        default=Path("prompts/examples/bird-first.txt"),
         metavar="FILE",
-        help="Agent A complete starting prompt (default: prompts/agent_a.txt)",
+        help="Agent A complete starting prompt (default: prompts/examples/bird-first.txt)",
     )
     run.add_argument(
         "--agent-b",
         type=Path,
-        default=Path("prompts/agent_b.txt"),
+        default=Path("prompts/examples/egg-first.txt"),
         metavar="FILE",
-        help="Agent B complete starting prompt (default: prompts/agent_b.txt)",
+        help="Agent B complete starting prompt (default: prompts/examples/egg-first.txt)",
     )
     run.add_argument("--model-a", default="deepseek-flash")
     run.add_argument("--model-b", default="deepseek-flash")
