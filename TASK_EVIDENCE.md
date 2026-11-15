@@ -325,3 +325,50 @@ than exercised live. Automated test cases collected/executed remain zero per the
 agreed verification scope. No local trial pipeline or simulated model runner was
 introduced. Total model usage/cost across implementation and review is unknown;
 no comparison or savings claim is made.
+
+### Separate per-call score YAML — 2026-11-15
+
+The user requested a separate score YAML for every call, preserving the detailed
+log, then narrowed its contents to only trial ID, creation time, status, optional
+model, and statement/score pairs. The existing dedicated task branch was reused
+from clean baseline `94408da`; no dependency, credential, provider, or model
+configuration was changed.
+
+Finished calls now export to `scores/TRIAL_ID.attempt-N.yaml` beside the full log.
+The exact top-level fields are `trial_id`, `created_at` (the call start time),
+`status`, `model`, and `scores`; each score entry contains only `statement` and
+`score`, in original statement order. Attempts with no validated complete rating
+set have null scores. Pending attempts are not exported. Full raw responses,
+prompts, usage, thinking, and issues remain solely in the existing detailed log.
+The full log is durably saved before the derived files; score-writing failure
+stops further calls. Existing owner-only atomic persistence and backup-before-
+retry ordering are retained through a shared YAML writer.
+
+The real completed trial was backfilled using `save_scores`, without an API call
+or modification to the source log. Created private artifact:
+`runs/ratings/scores/809d6f2537b842149f565df523d7fa47.attempt-1.yaml`.
+The original detailed log's bytes matched before and after export, SHA-256:
+`6069579b96589888ff7d9e0f09bed976ab0bdae4f8c4c8eb2af78a91216dddcd`.
+
+Verification:
+
+- `python3 -m black deepseek_ratings/records.py`: formatted the one changed
+  module. `python3 -m black --check deepseek_ratings/records.py`: one unchanged,
+  passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/deepseek-ratings-pycache .venv/bin/python -m py_compile deepseek_ratings/records.py`:
+  the changed module compiled successfully.
+- `.venv/bin/python -m deepseek_ratings --help` and `git diff --check`: passed.
+- A one-off export/inspection of the actual saved trial, using PyYAML,
+  `save_scores`, and the existing credential guard, confirmed exactly five
+  matching full statement/score pairs, the exact permitted top-level and pair
+  fields, matching call metadata, absence of the credential, mode `600`, and
+  byte-for-byte preservation of the original log.
+- `git check-ignore runs/ratings/scores/809d6f2537b842149f565df523d7fa47.attempt-1.yaml`:
+  the new artifact is ignored.
+- Independent read-only `gpt-6-astra` / high review reported no blocking findings
+  and confirmed field restriction, log preservation/order, atomic persistence,
+  and stopped retries on export failure. No keys or live APIs were accessed by
+  the reviewer. Total review/model usage and cost remain unknown.
+- Automated tests collected/executed: **0**. No simulated trials, local trial
+  pipeline, or extra live requests were added. Future-call integration and
+  failure behavior were reviewed statically; actual artifact export was verified.

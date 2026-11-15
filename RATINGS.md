@@ -136,6 +136,34 @@ request settings, all attempts, raw responses, returned final and reasoning
 text, original usage, parsed ratings, and issues. The accepted attempt number
 identifies which response produced the trial's final ratings.
 
+Every finished call also produces a separate
+`runs/ratings/scores/TRIAL_ID.attempt-N.yaml` file. It contains **only** the trial
+ID, the call's start time as `created_at`, call status, model, and full statement
+text paired with its score, in input order:
+
+```yaml
+trial_id: example_trial_id
+created_at: '2026-11-15T09:38:43+00:00'
+status: accepted
+model: deepseek-flash
+scores:
+  - statement: Independent evaluation should precede deployment.
+    score: 4
+```
+
+Retry calls have separate numbered files under the same trial ID. Status is
+`accepted`, `rejected`, `failed`, or `interrupted`, as recorded for that call in
+the detailed log. If a call provides no complete, valid set of scores, each
+statement has `score: null`; scores are never invented. A rejected call can have
+valid scores but fail another check, such as the output-token limit, so check its
+status. Reasons remain in the full log. Score files contain no prompts, thinking,
+token counts, issue details, or additional metadata.
+
+The complete log is saved first and retained alongside these exports. Score
+files use the same owner-only, atomic, synchronized writes. A score-file write
+failure stops the run before any further request. `--output-dir` moves both the
+full log and its `scores/` subdirectory together.
+
 Each attempt stores these separate counts:
 
 | Field | Meaning |

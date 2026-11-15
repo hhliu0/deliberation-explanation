@@ -47,6 +47,73 @@ def _create_directory(path: Path) -> None:
     _sync_directory(path.parent)
 
 
+def _write_yaml(path: Path, data: Dict[str, Any]) -> None:
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".ratings-",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            yaml.dump(
+                data,
+                stream,
+                Dumper=RecordDumper,
+                allow_unicode=True,
+                sort_keys=False,
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(str(temporary), str(path))
+        _sync_directory(path.parent)
+    except (OSError, yaml.YAMLError, RecursionError):
+        raise RatingError(
+            "Cannot save a trial or score file. Stopped; retain the last saved snapshot."
+        ) from None
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def save_scores(
+    log_path: Path, state: Dict[str, Any], attempt: Dict[str, Any], key: str
+) -> Path:
+    """Export only the requested metadata and statement/score pairs for one call."""
+    number = attempt["number"]
+    if type(number) is not int or number < 1:
+        raise RatingError("Cannot export scores without a valid call number.")
+    path = (
+        log_path.parent
+        / "scores"
+        / (log_path.stem + ".attempt-" + str(number) + ".yaml")
+    )
+    by_id = {item["id"]: item["score"] for item in attempt.get("ratings") or []}
+    data = {
+        "trial_id": state["trial_id"],
+        "created_at": attempt["started_at"],
+        "status": attempt["status"],
+        "model": state["request"]["model"],
+        "scores": [
+            {"statement": item["text"], "score": by_id.get(item["id"])}
+            for item in state["statements"]
+        ],
+    }
+    ensure_no_secret(str(path), key)
+    ensure_no_secret(data, key)
+    try:
+        _create_directory(path.parent)
+    except OSError:
+        raise RatingError("Cannot create the separate scores directory.") from None
+    _write_yaml(path, data)
+    return path
+
+
 class TrialStore:
     def __init__(self, output_dir: Path, trial_id: str, key: str):
         self.key = key
@@ -64,37 +131,11 @@ class TrialStore:
     def save(self, state: Dict[str, Any]) -> None:
         state["updated_at"] = now()
         ensure_no_secret(state, self.key)
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=self.path.parent,
-                prefix=".ratings-",
-                delete=False,
-            ) as stream:
-                temporary = Path(stream.name)
-                yaml.dump(
-                    state,
-                    stream,
-                    Dumper=RecordDumper,
-                    allow_unicode=True,
-                    sort_keys=False,
-                )
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(str(temporary), str(self.path))
-            _sync_directory(self.path.parent)
-        except (OSError, yaml.YAMLError, RecursionError):
-            raise RatingError(
-                "Cannot save the trial. Stopped; retain the last saved snapshot."
-            ) from None
-        finally:
-            if temporary is not None:
-                try:
-                    temporary.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        # Preserve the complete log before producing any derived score files.
+        _write_yaml(self.path, state)
+        for attempt in state["attempts"]:
+            if attempt["status"] != "pending":
+                save_scores(self.path, state, attempt, self.key)
 
     def backup(self, attempt: int) -> Path:
         path = (
