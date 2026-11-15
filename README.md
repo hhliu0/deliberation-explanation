@@ -30,9 +30,9 @@ Start with a four-message handshake to check the live provider interface:
 python3 -m deepseek_dialogue run --max-messages 4
 ```
 
-Live model availability and compatibility still need verification with your
-credentials. The default model for both agents is `deepseek-flash`; each model
-is independently configurable:
+A four-message live handshake with thinking enabled was verified on 2026-11-15
+using `deepseek-flash` for both agents. Other model/account configurations need
+their own live check. Each model is independently configurable:
 
 ```sh
 python3 -m deepseek_dialogue run --model-a deepseek-flash --model-b deepseek-flash

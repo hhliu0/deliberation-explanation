@@ -16,7 +16,8 @@
 - The user explicitly requested no local test pipeline. No automated test
   suite, CI, dependency installation, or formatter configuration was added.
 - The user authorized a four-message bird/egg handshake after supplying the
-  keys locally. That live run has not happened: the local key template is empty.
+  keys locally. The initial build left an empty local key template; the user
+  subsequently filled it and explicitly requested the live run recorded below.
 
 ## Recovery and provenance
 
@@ -57,6 +58,48 @@ No third-party application source was incorporated.
 - Automated test cases collected/executed: none, per the user's instruction.
   Syntax, formatting, help checks, and static review do not establish live API
   compatibility, successful speaker attribution, or actual accounting behavior.
+  The subsequent live check below provides evidence for this specific configuration.
+
+## Live handshake verification — 2026-11-15
+
+Implementation tested: `58c634d`, with no source changes required.
+
+Command:
+
+```sh
+env -u DEEPSEEK_API_KEY_A -u DEEPSEEK_API_KEY_B python3 -u -m deepseek_dialogue run --agent-a prompts/agent_a.txt --agent-b prompts/agent_b.txt --keys-file keys.local.env --max-messages 4
+```
+
+Exit status: 0. Four API requests completed; four accepted messages appeared in
+Agent A, Agent B, Agent A, Agent B order, with each reply addressing the previous
+argument. Both agents used `deepseek-flash`, thinking enabled at high effort.
+The explicit environment unsets ensured the requested local key file was used.
+
+The resulting private JSON is
+`runs/8275edc469134b8993bef3ecf0975bdc.json`. A one-off in-memory inspection of
+this actual artifact checked all four responses for:
+
+- completed trial status, unique trial ID and unique matching message IDs;
+- nonempty final content and reasoning text paired in each response;
+- exact recomputed whitespace word counts for final content and thinking;
+- valid input/output/reasoning/total counts, cache accounting, and delivery bounds;
+- equality with the saved original prompts and accepted dialogue;
+- absence of either key from all JSON strings and dictionary keys;
+- reconstructed request bodies containing only each agent's own starting prompt,
+  accepted dialogue, model, and generation settings: no IDs, word counts, token
+  usage, or reasoning records.
+
+All checks passed. `python3 -m deepseek_dialogue inspect runs/8275edc469134b8993bef3ecf0975bdc.json`
+also completed with exit status 0 and rendered all four paired records and local
+totals. Usage numbers and the dialogue remain in the ignored JSON rather than
+being copied into tracked documentation. The credential file and trial JSON
+both have mode `600` and are excluded by Git. Neither key was displayed.
+
+An independent read-only payload audit (`gpt-6-luna`, high effort) confirmed the
+same field exclusion and per-agent key selection in the code. The lead checked
+the artifact and payload construction directly. This is not a packet capture;
+it verifies the construction used by the transport and the saved live results.
+No additional requests, automated test suite, or local test pipeline were added.
 
 ## Delegation evidence
 
