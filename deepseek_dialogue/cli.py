@@ -43,13 +43,26 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run and inspect a saved DeepSeek dialogue. Agent A always starts."
+        prog="deepseek_dialogue",
+        description="Run and inspect a saved DeepSeek dialogue. Agent A always starts.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
     run = commands.add_parser("run", help="start a dialogue from two full prompt files")
-    run.add_argument("--agent-a", type=Path, default=Path("prompts/agent_a.txt"))
-    run.add_argument("--agent-b", type=Path, default=Path("prompts/agent_b.txt"))
+    run.add_argument(
+        "--agent-a",
+        type=Path,
+        default=Path("prompts/agent_a.txt"),
+        metavar="FILE",
+        help="Agent A complete starting prompt (default: prompts/agent_a.txt)",
+    )
+    run.add_argument(
+        "--agent-b",
+        type=Path,
+        default=Path("prompts/agent_b.txt"),
+        metavar="FILE",
+        help="Agent B complete starting prompt (default: prompts/agent_b.txt)",
+    )
     run.add_argument("--model-a", default="deepseek-flash")
     run.add_argument("--model-b", default="deepseek-flash")
     _add_run_options(run)

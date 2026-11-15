@@ -81,11 +81,19 @@ def load_keys(path: Path) -> Dict[str, str]:
 
 def ensure_no_keys(value: Any, keys: Dict[str, str]) -> None:
     """Do not persist or display a credential accidentally placed in other input."""
-    serialized = json.dumps(value, ensure_ascii=False)
-    if any(secret in serialized for secret in keys.values()):
-        raise DialogueError(
-            "A credential appeared in non-credential data; stopped without saving it."
-        )
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            if any(secret in item for secret in keys.values()):
+                raise DialogueError(
+                    "A credential appeared in non-credential data; stopped without saving it."
+                )
+        elif isinstance(item, dict):
+            pending.extend(item.keys())
+            pending.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            pending.extend(item)
 
 
 def complete(payload: Dict[str, Any], key: str) -> Dict[str, Any]:

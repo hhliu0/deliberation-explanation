@@ -77,6 +77,7 @@ def _usage(raw: Any) -> Dict[str, Any]:
 
 
 def _delivery_bound(usage: Dict[str, Any]) -> Optional[int]:
+    usage = _usage(usage)
     prompt = usage.get("prompt_tokens")
     completion = usage.get("completion_tokens")
     total = usage.get("total_tokens")
@@ -91,7 +92,14 @@ def _delivery_bound(usage: Dict[str, Any]) -> Optional[int]:
 
 
 def _response(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
-    record = {"usage": _usage(raw.get("usage"))}
+    record = {
+        "word_counts": {"message": None, "thinking": None},
+        "usage": (
+            copy.deepcopy(raw.get("usage"))
+            if isinstance(raw.get("usage"), dict)
+            else {}
+        ),
+    }
     for field in ("id", "model", "system_fingerprint"):
         if isinstance(raw.get(field), str):
             record[field] = raw[field]
@@ -105,6 +113,14 @@ def _response(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
     for field in ("content", "reasoning_content"):
         if isinstance(message.get(field), str):
             record[field] = message[field]
+    record["word_counts"] = {
+        "message": len(record["content"].split()) if "content" in record else None,
+        "thinking": (
+            len(record["reasoning_content"].split())
+            if "reasoning_content" in record
+            else None
+        ),
+    }
     if isinstance(choice.get("finish_reason"), str):
         record["finish_reason"] = choice["finish_reason"]
     if message.get("role") != "assistant" or message.get("tool_calls"):
@@ -171,7 +187,7 @@ def _reserve(output_dir: Path, state: Dict[str, Any], keys: Dict[str, str]) -> P
     api.ensure_no_keys(str(output_dir), keys)
     try:
         output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        path = output_dir / (state["run_id"] + ".json")
+        path = output_dir / (state["trial_id"] + ".json")
         descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(descriptor)
     except OSError:
@@ -187,7 +203,7 @@ def _read_state(path: Path) -> Dict[str, Any]:
         state = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(state, dict) or state.get("format_version") != FORMAT_VERSION:
             raise ValueError()
-        if not isinstance(state["run_id"], str):
+        if not isinstance(state["trial_id"], str):
             raise ValueError()
         settings = state["settings"]
         if (
@@ -211,7 +227,12 @@ def _read_state(path: Path) -> Dict[str, Any]:
         for attempt in state["attempts"]:
             if not isinstance(attempt, dict) or attempt["agent"] not in AGENTS:
                 raise ValueError()
-            if not isinstance(attempt["id"], str) or attempt["id"] in attempts:
+            if (
+                not isinstance(attempt["message_id"], str)
+                or attempt["message_id"] in attempts
+            ):
+                raise ValueError()
+            if not isinstance(attempt["trial_id"], str):
                 raise ValueError()
             if attempt["status"] not in (
                 "in_flight",
@@ -223,13 +244,21 @@ def _read_state(path: Path) -> Dict[str, Any]:
                 raise ValueError()
             if "response" in attempt and not isinstance(attempt["response"], dict):
                 raise ValueError()
-            attempts[attempt["id"]] = attempt
+            attempts[attempt["message_id"]] = attempt
+        accepted_ids = [
+            attempt["message_id"]
+            for attempt in state["attempts"]
+            if attempt["status"] == "accepted"
+        ]
+        message_ids = [item["message_id"] for item in state["messages"]]
+        if accepted_ids != message_ids:
+            raise ValueError()
         for index, item in enumerate(state["messages"]):
             if item["sender"] != AGENTS[index % 2]:
                 raise ValueError()
             if not isinstance(item["content"], str) or not item["content"].strip():
                 raise ValueError()
-            attempt = attempts[item["attempt_id"]]
+            attempt = attempts[item["message_id"]]
             result = attempt["response"]
             if (
                 attempt["status"] != "accepted"
@@ -249,6 +278,8 @@ def _read_state(path: Path) -> Dict[str, Any]:
 
 
 def _usage_text(usage: Dict[str, Any]) -> str:
+    usage = _usage(usage)
+
     def count(value: Any) -> str:
         return str(value) if _integer(value) else "unknown"
 
@@ -284,9 +315,13 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
         "prompt_cache_hit_tokens",
         "prompt_cache_miss_tokens",
     )
-    for agent in (*AGENTS, "all"):
+    for agent in (*AGENTS, "all", "current_trial"):
         attempts = [
-            a for a in state["attempts"] if agent == "all" or a["agent"] == agent
+            a
+            for a in state["attempts"]
+            if agent == "all"
+            or a["agent"] == agent
+            or (agent == "current_trial" and a["trial_id"] == state["trial_id"])
         ]
         labels = ("input", "output", "thinking", "total", "cache hit", "cache miss")
         chunks = []
@@ -306,7 +341,11 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
             if missing and known:
                 value_text += " (+ " + str(missing) + " unknown requests)"
             chunks.append(label + "=" + value_text)
-        label = "Whole history" if agent == "all" else LABELS[agent]
+        label = (
+            "Whole history"
+            if agent == "all"
+            else ("Current trial" if agent == "current_trial" else LABELS[agent])
+        )
         emit(
             label
             + " totals (local, "
@@ -319,8 +358,10 @@ def _summary(state: Dict[str, Any], emit: Callable[[str], None]) -> None:
 def _execute(
     state: Dict[str, Any], path: Path, keys: Dict[str, str], emit: Callable[[str], None]
 ) -> Path:
-    emit("Saved run: " + str(path.resolve()))
+    emit("Trial ID: " + state["trial_id"])
+    emit("Saved trial: " + str(path.resolve()))
     pending = None
+    interrupted = False
     try:
         while (
             len(state["messages"]) - state["initial_message_count"]
@@ -328,8 +369,8 @@ def _execute(
         ):
             agent = AGENTS[len(state["messages"]) % 2]
             pending = {
-                "id": uuid.uuid4().hex,
-                "source_run_id": state["run_id"],
+                "message_id": uuid.uuid4().hex,
+                "trial_id": state["trial_id"],
                 "agent": agent,
                 "started_at": now(),
                 "status": "in_flight",
@@ -360,12 +401,18 @@ def _execute(
                     {
                         "sender": agent,
                         "content": record["content"],
-                        "attempt_id": pending["id"],
+                        "message_id": pending["message_id"],
                     }
                 )
                 _save(path, state, keys)
                 emit("\n" + LABELS[agent] + ":\n" + record["content"])
                 emit(_usage_text(record["usage"]))
+                emit(
+                    "Words (local): message="
+                    + str(record["word_counts"]["message"])
+                    + ", thinking="
+                    + str(record["word_counts"]["thinking"])
+                )
                 pending = None
             except api.APIError as error:
                 pending["status"] = "unknown" if error.uncertain else "error"
@@ -387,6 +434,17 @@ def _execute(
             state["status"] = "completed"
             _save(path, state, keys)
     except KeyboardInterrupt:
+        interrupted = True
+        if (
+            pending is not None
+            and pending["status"] == "accepted"
+            and not any(
+                item["message_id"] == pending["message_id"]
+                for item in state["messages"]
+            )
+        ):
+            pending["status"] = "unknown"
+            pending["error_code"] = "interrupted_before_acceptance"
         if pending is not None and pending["status"] == "in_flight":
             pending["status"] = "unknown"
             pending["error_code"] = "interrupted_request"
@@ -396,7 +454,13 @@ def _execute(
             "\nPaused by Ctrl+C. An interrupted request may still be billed by DeepSeek."
         )
     _summary(state, emit)
-    emit("Run " + state["status"] + ". Saved: " + str(path.resolve()))
+    emit("Trial " + state["status"] + ". Saved: " + str(path.resolve()))
+    if interrupted:
+        raise KeyboardInterrupt()
+    if state["status"] != "completed":
+        raise DialogueError(
+            "The trial is paused. Inspect the saved JSON before resuming."
+        )
     return path
 
 
@@ -418,8 +482,8 @@ def run_dialogue(
         raise DialogueError("Both agents need a model name.")
     state = {
         "format_version": FORMAT_VERSION,
-        "run_id": uuid.uuid4().hex,
-        "parent_run_id": None,
+        "trial_id": uuid.uuid4().hex,
+        "parent_trial_id": None,
         "created_at": now(),
         "status": "running",
         "settings": {
@@ -451,8 +515,8 @@ def resume_dialogue(
     keys = api.load_keys(keys_file)
     state = _read_state(run_path)
     api.ensure_no_keys(state, keys)
-    state["parent_run_id"] = state["run_id"]
-    state["run_id"] = uuid.uuid4().hex
+    state["parent_trial_id"] = state["trial_id"]
+    state["trial_id"] = uuid.uuid4().hex
     state["created_at"] = now()
     state["status"] = "running"
     state["initial_message_count"] = len(state["messages"])
@@ -469,7 +533,9 @@ def inspect_run(
     run_path: Path, show_thinking: bool, emit: Callable[[str], None]
 ) -> None:
     state = _read_state(run_path)
-    emit("Run: " + state["run_id"] + " (" + str(state.get("status", "unknown")) + ")")
+    emit(
+        "Trial: " + state["trial_id"] + " (" + str(state.get("status", "unknown")) + ")"
+    )
     for number, attempt in enumerate(state["attempts"], 1):
         emit(
             "\nRequest "
@@ -481,6 +547,7 @@ def inspect_run(
             + "]"
         )
         record = attempt.get("response", {})
+        emit("Message ID: " + attempt["message_id"])
         if isinstance(record.get("content"), str):
             emit(record["content"])
         if show_thinking:
@@ -489,6 +556,14 @@ def inspect_run(
                 + str(record.get("reasoning_content", "Not returned."))
             )
         emit(_usage_text(_usage(record.get("usage"))))
+        counts = record.get("word_counts", {})
+        if isinstance(counts, dict):
+            emit(
+                "Words (local): message="
+                + str(counts.get("message", "unknown"))
+                + ", thinking="
+                + str(counts.get("thinking", "unknown"))
+            )
         if isinstance(attempt.get("error_code"), str):
             emit("Outcome: " + attempt["error_code"])
     _summary(state, emit)
