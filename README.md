@@ -10,6 +10,11 @@ Two independent terminal tools share this repository:
 Both tools start a fresh trial each time. Neither package imports the other
 or automatically starts its workflow.
 
+Each run saves only its JSON result inside its archive and prints summaries to
+the terminal. Neither tool has a resume or historical-inspection command, and
+neither reads old trial files. There are no separate report, score, or backup
+outputs for new runs.
+
 ## Run a rating
 
 Edit the five files in `prompts ratings/Agent A/` or `prompts ratings/Agent B/`,

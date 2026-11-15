@@ -1285,3 +1285,167 @@ Shared-research use and MIT licensing remain unchanged; no external code reused.
 - Automated test-suite cases: zero, following the project requirement. All direct
   checks above passed; no simulated dialogue runner, live API call, installation,
   push, PR, or deployment. Full live execution was not exercised in this task.
+
+
+## Ratings five-file payload and ordered JSON archive (2026-11-15)
+
+### Scope, approvals, and recovery
+
+The user requested the dialogue-style initial payload for ratings, using separate
+"prompts ratings/Agent A" and "Agent B" input sets. New output contains only the
+ordered trial header, statement/rating pairs, agent message and token counts, and
+five original input texts. Files belong directly in "rating archive", named with
+trial name before ID. The reference to "greetings" was interpreted in context as
+ratings; no separate greetings program was found or changed.
+
+After the lead inspected the YAML/retry/backup pipeline, the user explicitly chose
+**"One request, no retry"**, then **"Approve the ratings migration"**. The proposal
+covered inputs.py, records.py, CLI/engine callers, statement validation, protected
+storage, safe filenames/full-path credential checks, and removal of new
+retry/score/backup output. This satisfied the supplied AGENTS.md security-control
+approval boundary before implementation.
+
+Review identified acceptance followed by an interruption/save error. The user
+then explicitly permitted retaining the exact accepted message, with null ratings.
+Final behavior retains accepted message/thinking/counts in that case; ratings
+require completed trial status. Earlier all-null-message checks were superseded
+by the final policy checks below.
+
+Baseline and index were clean at 4d7b0fb. Work uses the dedicated local branch
+codex/ratings-five-part-json. Checkpoint e4d56e2 preserves implementation and
+initial checks before final policy verification/evidence. Reverting this task's
+commits restores prior tracked code/docs. Retain new private-folder ignore rules
+if rolling back while keeping those folders. New inputs can be recreated from
+the original YAML and baseline rating instructions. No existing input or result
+was renamed, converted, or deleted.
+
+Shared research use and MIT licensing remain unchanged. Payload layout, profiles,
+and filename policy reuse this repository's own MIT-licensed dialogue code at
+4d7b0fb; rating instructions come from its own baseline engine. No external code
+or dependency was introduced. Existing approved PyYAML 6.0.3 was used to read and
+compare original inputs; the new runtime uses the standard library. Dependency,
+license, tool, credential, provider, and dialogue files/settings are unchanged.
+
+### Result
+
+- Created private prompts ratings/Agent A and Agent B folders, each with
+  model-config.txt, persona.txt, memory.txt, statements.txt, starting-prompt.txt.
+  A uses the original Skeptic persona; B the Extrapolator. Both preserve twelve
+  original statement IDs/texts and exact baseline rating instructions, with empty
+  memory. Input directories are 0700, files 0600, and excluded from Git.
+- The selected five files are read once. Only memory may be blank. Model settings
+  and statements use strict JSON inside text files; duplicate keys, non-JSON
+  constants, invalid schemas, duplicate IDs, and blank/invalid text are rejected.
+- Payload structure matches initial dialogue requests: persona in system;
+  memory/statements/starting prompt in one user message; configuration as API
+  parameters; streaming false. Rating instructions live in the prompt file.
+  Both modes omit response_format to match dialogue. Packages stay independent.
+- CLI requires --agent agent_a|agent_b, --trial-name NAME, and exactly one of
+  --enable-thinking or --not-enable-thinking. The flag overrides either supported
+  file profile to enabled/high/8192 or disabled/512. Optional input-parent,
+  output, and key paths remain available. Old YAML/persona/thinking flags are
+  replaced. The existing single-key credential loader remains in use.
+- Created ignored rating archive with mode 0700. One JSON file is reserved per
+  trial using the approved safe-name-plus-32-character-ID policy and 180-byte
+  name prefix; the exact name remains in JSON. Whole-state/full-path credential
+  scans, exclusive creation, 0600 files, atomic replacement, file/directory fsync,
+  and temporary-file cleanup remain intact.
+- Exact top-level order: trial_name, trial_id, started_at, ended_at, thinking,
+  ratings, agent_message, inputs. Thinking is "thinking enabled" or "not enabled".
+  Pairs contain statement then rating. Agent message contains agent_name, message,
+  thinking, message_token_count, thinking_token_count. Inputs contain the five
+  filenames in the order above with original loaded text values.
+- Only completed trials expose validated ratings. Other states have null ratings.
+  An already accepted message retains exact text/reasoning/counts after a later
+  failure/interruption; without acceptance, message fields are null except name.
+  Absent reasoning remains null and a returned empty string remains empty.
+- Engine execution has one provider call and no retry loop. New runs create no
+  YAML, separate score files, backups, or full-state artifacts. Response validation
+  and token accounting are unchanged: message count subtracts reported reasoning
+  and separate safety tokens from completion tokens. Terminal summaries remain.
+- End timestamps are populated on completion/failure/handled Ctrl+C. Abrupt
+  termination or unsuccessful recovery storage can leave the last saved snapshot.
+  Existing results remain untouched. README and ratings guide cover the workflow.
+
+### Verification and independent review
+
+These were direct helper/parser/AST/temp-file checks, not an automated suite or
+simulated model runner. No engine.run invocation passed argument validation;
+no credential file was read and no provider request was made.
+
+- Commands: python3 -m black deepseek_ratings and python3 -m black --check
+  deepseek_ratings formatted/checked eight files with existing Black 25.11.0.
+  Final command python3 -m black --check deepseek_ratings deepseek_dialogue
+  left all 17 unchanged. git diff --check 4d7b0fb passed.
+- One-off python3 - structural checks compiled all 17 modules without bytecode
+  writes. Response source is byte-identical to baseline; API AST matches after
+  excluding its updated docstring and obsolete saved-body error wording.
+  Confirmed one api.complete site, no execution loop, no cross-package imports,
+  remarks on changed helper definitions, no stale removed-API callers, and no
+  dialogue/dependency/license changes.
+- python3 -m deepseek_ratings --help passed. Direct parser checks covered four
+  agent/mode combinations and seven expected exit-2 cases. Six invalid direct
+  run arguments failed before tripwired input/key access.
+- One-off python3 - checks passed 16 exact dialogue-payload comparisons across
+  source profiles, thinking flags, agents, and empty/nonempty memory. Inputs
+  remained unchanged and nested settings were copied. Six file errors, twelve
+  invalid statement forms, and ten invalid model settings were rejected.
+- One-off .venv/bin/python - loaded baseline YAML parsing code from git show
+  4d7b0fb:deepseek_ratings/inputs.py in memory. Both real private input sets match
+  original personas, twelve statements, and baseline instructions; four real-input
+  payload comparisons passed. Verified five files per agent, 0700/0600 permissions,
+  Git exclusion, and empty mode-0700 archive. Original YAML hashes stayed unchanged
+  during verification; private content was not printed.
+- Direct response checks accepted both modes and all five Likert labels, normalized
+  ID order, and preserved safety/reasoning subtraction and omitted disabled-mode
+  reasoning counts. Nine invalid responses were rejected. Literal/JSON-escaped
+  fake credentials were rejected; real keys were not used.
+- Initial direct storage checks covered exact field order/text/counts, no mutation,
+  fifteen filename edge cases, ID uniqueness, 0600/0700, one JSON artifact,
+  collisions, stable end timestamps, whole-state secret checks including excluded
+  fields, and path checks before directory creation. A fake credential formed
+  only after filename normalization was rejected. Injected replacement failure
+  preserved prior bytes and cleaned temporary files. File/directory fsync observed.
+- After the user's clarification, final python3 - checks passed sixteen projection
+  cases, eight on-disk lifecycle transitions, and two save-error/recovery sequences.
+  Accepted message/thinking/counts survived failed/interrupted states with null
+  ratings; unaccepted messages stayed null. An in-memory negative control with
+  the original unguarded ratings projection exposed non-null failed ratings; final
+  projection passed while retaining identical accepted message fields.
+- Documentation checks parsed all three current ratings command examples and
+  verified nine local README/ratings-guide links.
+- Read-only inventory used gpt-6-luna/high. Storage implementation used
+  gpt-6-astra/high, owning only records.py; the lead implemented/integrated other
+  files and owned scope decisions. A separate gpt-6-astra/high reviewer checked
+  the whole migration and final user policy, finding no remaining blockers.
+  Lead exact model/effort, elapsed time, and all usage/cost data are unknown;
+  no model-routing comparison or savings claim is made.
+- Automated suite cases collected/executed: zero, per existing project policy.
+  All listed direct checks passed. No live trial, simulated runner, installation,
+  push, PR, shared-branch merge, or deployment occurred. Live compatibility of the
+  changed payload was not exercised; existing strict response validation remains.
+
+### Follow-up: archive-only output and no historical commands
+
+The user further required all run artifacts to stay in the archive and removal
+of any remaining resume or separate terminal inspection pipeline. The lead and
+a bounded gpt-6-luna/high read-only audit checked both packages. Neither retained
+such a pipeline: dialogue only exposes run, and ratings exposes its fresh trial
+options. There are no old-state readers or separate backup, score, memory-export,
+or report writers. Historical results remain untouched.
+
+README and the ratings guide now state this explicitly. The ratings CLI error
+message now says to read the saved JSON file, avoiding wording that could suggest
+an inspection command. No execution, storage-control, or credential logic changed
+in this follow-up. An explicit --output-dir still selects the archive location.
+
+Final one-off python3 - checks rejected eight resume/inspect command or flag forms
+across the two parsers. Direct storage-helper checks created exactly two final JSON
+files in temporary Dialogue Archive/rating archive directories, with no remaining
+temp, lock, report, score, or backup files. No full runner or provider was used.
+Both packages' writes were reviewed: atomic temporary files and dialogue locks
+stay inside the chosen archive and are normally cleaned up. Abrupt termination
+can leave such files inside that archive, never an intentional external artifact.
+Source inventory found no resume/inspection definitions. Final
+python3 -m black --check deepseek_dialogue deepseek_ratings left all 17 files
+unchanged; git diff --check passed. The lead verified the read-only audit findings.

@@ -130,7 +130,8 @@ Prompts and accepted context are sent only when a trial is explicitly run.
 ## One request and validation
 
 Each trial makes at most one provider request. There is no automatic retry,
-backup output, separate score file, or resume pipeline. Failed input validation,
+backup output, separate score file, resume pipeline, or historical-inspection
+command. Failed input validation,
 missing keys, or initial storage errors prevent the request entirely.
 
 Accepted responses must finish normally, contain a single assistant message with

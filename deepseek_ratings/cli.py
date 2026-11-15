@@ -66,7 +66,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
     except (OSError, UnicodeError, ValueError, RecursionError):
         print(
-            "Local operation failed; inspect the last saved trial if one was created.",
+            "Local operation failed; read the saved JSON file if one was created.",
             file=sys.stderr,
         )
         return 1
