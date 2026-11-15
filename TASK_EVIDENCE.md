@@ -283,5 +283,45 @@ actual filesystem without creating a trial. Lead model/effort, total tokens,
 and total cost are not exposed and remain unknown. No performance, cost, or
 routing comparison is claimed.
 
-Live trial status: not started; awaiting the user's locally supplied key after
-implementation. Static/input checks do not establish live API compatibility.
+Implementation commit: `b59f359`, verified on its dedicated local branch with a
+clean tracked working tree. The user subsequently confirmed that the single key
+was saved locally and authorized the already-planned live trial.
+
+### Live Skeptic trial
+
+Command executed against implementation `b59f359`:
+
+```sh
+env -u DEEPSEEK_API_KEY .venv/bin/python -u -m deepseek_ratings --personas inputs/personas.local.yaml --statements inputs/statements.local.yaml --persona skeptic --thinking enabled --keys-file ratings.local.env
+```
+
+Exit status: `0`. One request, five accepted ratings, no retry. Private artifact:
+`runs/ratings/809d6f2537b842149f565df523d7fa47.yaml`. The environment unset ensured
+that the user-supplied local key file was used. No code change was required.
+
+A one-off read of this real YAML using `yaml.safe_load`, `load_inputs`,
+`build_payload`, `evaluate`, `aggregate`, and the credential guard confirmed:
+
+- completed status, UUID/path agreement, one accepted attempt, and five scores;
+- exact equality with the current persona, statement list, and intended fresh
+  two-message request, both at trial and attempt level;
+- successful revalidation of the raw API response and matching parsed ratings;
+- separate provider-backed input, message, reasoning, completion, and total
+  counts, correct arithmetic/aggregate usage, and message output below 512 tokens;
+- absence of the API key from raw YAML and all parsed strings;
+- mode `600` for both the YAML and key file, and Git exclusion of both paths.
+
+The actual request explicitly set `thinking.type: enabled` and
+`reasoning_effort: high`, and the returned model was `deepseek-flash`. DeepSeek
+reported **zero reasoning tokens** and returned an empty `reasoning_content`
+string. Those values are retained verbatim; the tool did not invent reasoning or
+replace a missing count with zero in this thinking-enabled run. This verifies
+request construction and accounting, not that the provider generated nonzero
+reasoning. Trial scores and other usage values remain in the private artifact.
+
+No additional live calls were made. Disabled thinking, malformed-output retries,
+provider failures, and interruption behavior remain reviewed statically rather
+than exercised live. Automated test cases collected/executed remain zero per the
+agreed verification scope. No local trial pipeline or simulated model runner was
+introduced. Total model usage/cost across implementation and review is unknown;
+no comparison or savings claim is made.
