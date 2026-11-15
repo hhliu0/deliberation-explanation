@@ -179,7 +179,9 @@ Each JSON contains only these fields in this exact order:
 3. `started_at`.
 4. `ended_at`.
 5. `thinking`: `"thinking enabled"` or `"not enabled"`.
-6. `ratings`: ordered objects containing `statement` then `rating`.
+6. `ratings`: ordered objects containing `statement_number`, `statement`, then
+   `rating`. Numbers start at 1 and follow the selected agent's `statements.txt`
+   list order, independently of statement IDs or response order.
 7. `agent_message`: `agent_name`, `message`, `thinking`, `message_token_count`,
    `thinking_token_count`, in that order.
 8. `inputs`: `model-config.txt`, `persona.txt`, `memory.txt`, `statements.txt`,

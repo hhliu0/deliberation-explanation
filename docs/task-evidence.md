@@ -1577,3 +1577,36 @@ or environment setup was added. Existing Black 25.11.0 was used.
 - Automated suite cases collected/executed: zero, following existing project
   policy. All direct checks above passed. No live provider call, simulated model
   runner, installation, push, PR, shared-branch merge or deployment occurred.
+
+
+## Sequential statement numbers in rating JSON (2026-11-15)
+
+The user requested a simple sequential number for each archived rating statement,
+following the selected prompt's statement order. Baseline/index were clean at
+94b020e (including the user's committed prompts). Work uses the local branch
+codex/rating-statement-numbers; reverting this task's commit restores the prior
+projection. Existing prompts and archived records are unchanged.
+
+The ratings snapshot now adds statement_number before statement and rating in
+each entry. Numbers are integers starting at 1, assigned by the validated
+statements.txt list order, independent of statement IDs and provider response
+order. Running, failed, or interrupted snapshots retain numbered statements and
+their existing null-rating behavior. The current ratings guide documents this.
+No credential, validation, storage-control, dependency, license, or provider
+setting changed; shared research use and MIT licensing remain unchanged.
+
+Verification:
+- python3 -m black ratings/source/records.py: one file unchanged; final
+  python3 -m black --check ratings/source/records.py and git diff --check passed.
+- One-off python3 - compiled the changed module, checked five synthetic snapshot
+  states, deliberately nonsequential IDs and reversed response order, exact
+  per-entry field order, no state mutation, and one temporary on-disk JSON save.
+  All passed. Removing the new number from each result exactly reproduces the
+  baseline output; the baseline lacks the requested numbers as a negative control.
+- All AST outside snapshot matches 94b020e, including credential checks and
+  protected file-writing functions. No real credentials or existing archive
+  contents were read; archive filename inventory only was inspected.
+- Independent gpt-6.1-sol/xhigh read-only review found no actionable findings or
+  blockers. Lead exact model/effort, elapsed time and all usage/cost are unknown.
+- Automated suite cases collected/executed: zero, following project policy.
+  No simulated runner, live provider call, installation, push, PR or deployment.

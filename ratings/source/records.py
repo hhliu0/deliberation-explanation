@@ -41,8 +41,12 @@ def snapshot(state: Dict[str, Any]) -> Dict[str, Any]:
             "thinking enabled" if state["thinking"] == "enabled" else "not enabled"
         ),
         "ratings": [
-            {"statement": item["text"], "rating": ratings.get(item["id"])}
-            for item in state["statements"]
+            {
+                "statement_number": number,
+                "statement": item["text"],
+                "rating": ratings.get(item["id"]),
+            }
+            for number, item in enumerate(state["statements"], start=1)
         ],
         "agent_message": {
             "agent_name": state["agent_name"],
