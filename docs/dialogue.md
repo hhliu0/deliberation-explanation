@@ -99,7 +99,13 @@ Agent A always starts. The supplied discussion instructions tell each agent how
 to open or respond based on the dialogue in memory.
 
 `engine._memory()` combines that agent's initial memory with all accepted replies
-in chronological order, labeled `[agent_a]` and `[agent_b]`. Every accepted reply,
+in chronological order, labeled `[agent_a]` and `[agent_b]`. New runs present this
+as one continuous memory section, without headings or explanations identifying
+the boundary between imported context and the current dialogue. The original
+input and individual accepted turns remain distinct in the local JSON log for
+research inspection. Speaker labels remain visible; supplied text is not rewritten
+to remove any source cues it already contains. This removes explicit origin cues
+but does not establish that the model will confuse the sources. Every accepted reply,
 including the opening, is added before the next call. Each agent sees only its
 own initial memory and persona plus the public dialogue. The same transcript is
 not also sent as separate assistant messages. Reasoning, rejected replies, usage,
@@ -182,6 +188,11 @@ five-part format or given new memory exports. Starting a new run with a single
 complete prompt file is no longer supported; split its contents into the five
 files above. The earlier example `.txt` files and filled research prompts remain
 available as source material.
+
+Earlier version-2 logs without `settings.memory_format` retain their original
+`Initial memory` / `Dialogue so far` headings on resume. New runs save
+`memory_format: blended`; their archived memory uses the same unseparated text
+that enters the payload. Saved prompt text is preserved in both cases.
 
 The default output directory is `runs/dialogue/`. The retained research chats
 are grouped in its `deliberation/` and `deliberation-no-thinking/` subdirectories;

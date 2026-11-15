@@ -45,7 +45,12 @@ independent when they share prior discussion. Missing material should stay
 explicitly unknown; filling a template is not permission to fabricate a memory.
 
 Each agent sees its own persona and initial memory plus all accepted public
-replies. The runner adds each accepted reply to both agents' trial-specific
+replies in a single memory section, without explaining which text was imported
+and which came from this run. Speaker labels remain. The current starting prompt
+does not instruct the agents to distinguish a stored position from a position
+formed during the dialogue; that distinction remains available in the local log.
+This experimental choice permits source ambiguity but has not been shown to
+cause source confusion. The runner adds each accepted reply to both agents' trial-specific
 archived memory, without modifying the original inputs. Thinking and rejected
 responses remain local to the detailed log. New runs start from their selected
 input files and never automatically read an earlier run's archive.

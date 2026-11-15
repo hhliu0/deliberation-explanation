@@ -719,3 +719,42 @@ not modified or removed.
   Review model/effort is recorded above; its token usage/cost are unknown. Recovery
   capture was at 13:43:22 UTC; exact total task elapsed time is unknown. No model
   routing comparison or cost claim is made.
+
+
+## Remove model-visible memory origin boundaries (2026-11-15)
+
+User steering explicitly requests confusion between initial context and dialogue.
+The lead interpreted the antecedent as those two sources, retaining speaker
+identity, and stated that interpretation before editing. New runs now save
+`settings.memory_format: blended` and concatenate the supplied memory with accepted
+speaker-labeled turns without origin headings. The current example and deliberation
+starting prompts no longer explain that boundary or require distinguishing a
+previously recorded stance from one formed in discussion. No text or memories
+are invented; user-supplied text is retained, including any source cues it already
+contains. Full provenance remains in the JSON log. This is an experimental prompt
+choice, not evidence that the model will actually confuse the sources.
+
+Baseline was clean `f6bb3d6` on the existing task branch. Rollback is a revert of
+this follow-up commit. Missing `memory_format` in older V2 logs retains the prior
+rendering, preserving resumed requests; V1 remains unchanged. No private inputs,
+credentials, historical logs, dependencies, transport code, or licensing changed.
+
+Verification used direct functions, without a trial runner or provider request:
+
+- `python3 -` compared four empty/nonempty seed/history combinations to the baseline
+  engine loaded from `git show HEAD:deepseek_dialogue/engine.py`. Legacy V2 output
+  remained identical, while each blended output removed the generated source
+  headings and preserved the supplied text/speaker-labeled history. The baseline
+  renderer failed that new expectation, serving as the negative control.
+- The two real retained V1 logs still produced identical payloads for both agents.
+  Payload construction did not mutate input state. All three current starting
+  prompts passed checks excluding the old provenance distinctions. Six dialogue
+  modules passed `compile(...)` syntax checks without cache writes.
+- `python3 -m black deepseek_dialogue/engine.py` and the corresponding `--check`
+  each reported one unchanged file. `git diff --check` passed.
+- Automated test-suite cases: zero. No live call, local trial pipeline, dependency
+  change, push, or deployment. Behavioral source confusion remains unmeasured.
+- Independent read-only review used `gpt-6.1-sol` / xhigh and reported no blockers,
+  independently checking old-V2 payload equality, blended content preservation,
+  prompt scope, and documentation. Lead model/effort, all usage/cost, and exact
+  total elapsed time remain unknown.

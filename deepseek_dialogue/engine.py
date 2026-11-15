@@ -151,6 +151,9 @@ def _memory(state: Dict[str, Any], agent: str) -> str:
     transcript = "\n\n".join(
         "[" + item["sender"] + "]\n" + item["content"] for item in state["messages"]
     )
+    if state["settings"].get("memory_format") == "blended":
+        return initial + ("\n\n" if initial and transcript else "") + transcript
+    # Older saved runs retain their original source headings when resumed.
     return "Initial memory:\n" + initial + "\n\nDialogue so far:\n" + transcript
 
 
@@ -321,6 +324,11 @@ def _read_state(path: Path) -> Dict[str, Any]:
                     ):
                         raise ValueError()
             else:
+                if settings.get("memory_format", "separated") not in (
+                    "blended",
+                    "separated",
+                ):
+                    raise ValueError()
                 inputs.validate_parts(agent_config["inputs"])
                 expected = inputs.model_config(
                     agent_config["inputs"]["model_config"],
@@ -637,6 +645,7 @@ def run_dialogue(
         "settings": {
             "agents": agents,
             "thinking_override": thinking,
+            "memory_format": "blended",
             "peer_max_tokens": PEER_LIMIT,
         },
         "new_message_limit": max_messages,
