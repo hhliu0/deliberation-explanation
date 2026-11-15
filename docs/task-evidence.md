@@ -622,3 +622,100 @@ move, removed from the manifest, and all destinations were verified by hash.
 - Automated test-suite cases: zero. No live calls, simulated model trials, test
   pipeline, installations, push, or deployment. Total model/review usage and cost
   are unknown; no routing comparison is claimed.
+
+
+## Five-part dialogue inputs (2026-11-15)
+
+### Scope and recovery
+
+The user requested model config, persona, memory, discussion statement(s), and
+starting prompt as five separate local plain-text inputs. They clarified that
+each new run must have its own memory archive and must not write back to original
+memory inputs. This task changes dialogue input loading, payload construction,
+memory export, examples, and usage documentation. Research sharing and the MIT
+license remain unchanged. No external implementation was incorporated, no tools
+or dependencies were installed, and no credentials, authentication controls,
+provider endpoint, rating implementation, or persistent application settings were
+changed. The earlier task-approved thinking modes remain available.
+
+Baseline: `59a7637` on `codex/repo-cleanup`, with an empty index and existing
+unstaged thinking-toggle changes in the dialogue CLI and engine. Before editing,
+those working files, affected documents, full unstaged patch, empty index patch,
+and baseline commit were saved in
+`runs/backups/five-part-inputs-20261115T134322Z/`. Work continued on
+`codex/dialogue-five-part-inputs`. The related thinking-toggle implementation is
+preserved and integrated into the five-part flow. For recovery, revert this task's
+commit and restore the saved starting CLI/engine (or apply `starting.patch`) to
+recover the pre-task uncommitted thinking work; review any later edits first.
+The original examples, private inputs, credentials, and historical run files were
+not modified or removed.
+
+### Result
+
+- New runs read five UTF-8 files from each selected agent directory. Model config
+  is JSON text restricted to the existing enabled/high/8192 or disabled/512
+  profile plus the model name. The other four parts are ordinary text, with empty
+  starting memory allowed. Invalid/missing inputs stop before credential loading
+  or provider requests. Optional `--thinking` overrides both file profiles only
+  for that run, retaining raw inputs and effective settings in the log.
+- V2 payloads use the persona as system content, then a user message containing
+  memory, statements, and starting prompt. Model settings are API fields. Memory
+  includes the initial text plus all accepted turns with speaker labels, once
+  each; thinking and rejected attempts never enter it.
+- The existing JSON log remains authoritative. Atomic memory exports are written
+  after the JSON snapshot, beneath `archive/TRIAL_ID/`. Every new run starts from
+  its chosen input files, without reading previous archives. Resume uses saved
+  inputs/history and rebuilds exports, including a completed run after its final
+  export was interrupted. Input files are never overwritten. The two memory
+  files and JSON are not a single filesystem transaction; a failed export stops
+  further requests and resume repairs it. Existing atomic-write behavior does
+  not claim power-loss durability of directory entries.
+- Version-1 logs retain the original payload shape for inspect/resume. The CLI
+  now accepts agent directories rather than combined prompt files; model names
+  move into their config files. Old source prompts remain available, with a
+  documented migration and a current standalone deliberation starting prompt.
+
+### Verification and review
+
+- `python3 -m black deepseek_dialogue` formatted the three affected modules;
+  `python3 -m black --check deepseek_dialogue` passed for all six modules using
+  the already installed formatter.
+- `python3 -m compileall -q deepseek_dialogue deepseek_ratings` encountered the
+  sandbox's blocked system bytecode cache for three changed files. A subsequent
+  `python3 -` check called `compile(path.read_text(), str(path), 'exec')` on all
+  14 Python modules without filesystem cache writes; all 14 passed.
+- `python3 -m deepseek_dialogue --help`, `run --help`, `resume --help`, and
+  `inspect --help` passed. CLI wiring was also reviewed against the new signature.
+- One-off `python3 -` input/function checks loaded all 10 example files, checked
+  both thinking overrides for both agents, rejected eight malformed config
+  variants and four empty required parts, and verified example hashes remained
+  unchanged. These were direct function checks, not a model runner or local
+  trial pipeline.
+- Using copies of the two real retained 20-turn logs, four agent/mode request
+  constructions contained each accepted reply exactly once, excluded returned
+  reasoning, and produced empty-history context when starting fresh. Effective
+  configurations were independent copies; mixed enabled/disabled agents retained
+  their separate generation profiles. Both V2-shaped record copies round-tripped
+  through validation; mismatched saved configuration was rejected.
+- In temporary directories only, the completed-resume branch generated owner-only
+  (0600) archive files, repaired deliberately incomplete exports, left the JSON
+  bytes unchanged, and needed no credential file or API request. Original real
+  logs were byte-identical afterward. No saved research trial was converted.
+- An independent read-only `gpt-6.1-sol` / xhigh reviewer compared both V1 logs
+  and both agents' payloads against the pre-task engine: state and payload
+  dictionaries were identical. The reviewer found the completed-run export
+  recovery gap; the lead fixed it and directly verified repair. Final review
+  reported no remaining actionable findings, confirmed per-agent accounting,
+  original-file safety, and unchanged transport/ratings.
+- Current README/dialogue/deliberation local links resolve. AST checks found no
+  imports between the dialogue and rating packages. Git diff checks passed;
+  credential paths, private input directories, and memory archives remain ignored.
+- Automated test-suite cases collected/executed: zero. No test suite, CI,
+  simulated model runner, live request, push, or deployment was added or run.
+  Provider compatibility for the new V2 request shape remains unverified live;
+  network/error and mid-write interruption paths were reviewed statically except
+  for the direct archive-repair checks described above.
+- Lead model/effort, token usage, and cost are not exposed here and remain unknown.
+  Review model/effort is recorded above; its token usage/cost are unknown. Recovery
+  capture was at 13:43:22 UTC; exact total task elapsed time is unknown. No model
+  routing comparison or cost claim is made.

@@ -29,14 +29,17 @@ persona, or `--thinking disabled` for a fresh non-thinking trial. The
 
 ## Run a dialogue
 
-The default bird/egg example uses the explicitly named prompts in
-`prompts/examples/`:
+The default bird/egg example uses five text files per agent in
+`prompts/examples/bird-first/` and `prompts/examples/egg-first/`: model config,
+persona, initial memory, statements, and discussion starting prompt.
 
 ```sh
 python3 -m deepseek_dialogue run --max-messages 4
 ```
 
-For a research deliberation, choose filled persona prompts explicitly. The
+For a research deliberation, select each agent's input directory with `--agent-a`
+and `--agent-b`. Each new run archives its growing memory separately from the
+original inputs. The
 [deliberation guide](docs/deliberation.md) explains the reusable templates;
 [dialogue usage](docs/dialogue.md) covers starting, resuming, and inspecting chats.
 Dialogue output defaults to `runs/dialogue/`; rating output defaults to
@@ -47,11 +50,12 @@ Dialogue output defaults to `runs/dialogue/`; rating output defaults to
 ```text
 inputs/                              user YAML inputs; unchanged by cleanup
 prompts/
-  examples/                          bird-first and egg-first example prompts
+  examples/                          five-part bird-first and egg-first inputs
   deliberation/                      agent templates and private persona prompts
   deliberation-no-thinking/          private prompts for the non-thinking condition
 runs/
   dialogue/
+    archive/                         per-trial growing memory files for new runs
     deliberation/                    retained twenty-message conversation
     deliberation-no-thinking/        retained non-thinking conversation
   ratings/

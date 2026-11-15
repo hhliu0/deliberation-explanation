@@ -6,25 +6,32 @@ disagreement and permit justified revision. Agreement is an allowed outcome, not
 the success criterion. This is a research-informed starting design; its effects
 have not been measured on this project's models or topics.
 
-Use [Agent A](../prompts/deliberation/agent-a.template.txt) and
-[Agent B](../prompts/deliberation/agent-b.template.txt). Each file contains shared operating
-instructions followed by exactly two input sections: the persona and previously
-stored context. The instructions are the same except for identity and the first
-turn. Agent A opens; Agent B responds. Existing bird/egg example prompts remain
-available.
+Use the shared [discussion starting prompt](../prompts/deliberation/starting-prompt.txt)
+with the five-part input format described in [dialogue usage](dialogue.md).
+Each agent has a separate directory containing:
 
-## Filling the two sections
+| File | Deliberation input |
+| --- | --- |
+| `model-config.txt` | That agent's model and enabled/disabled thinking profile. |
+| `persona.txt` | `You are agent_a` or `You are agent_b`, followed by that persona's perspective. |
+| `memory.txt` | Its actual previously recorded position, reasons, uncertainty, and relevant context; may be empty when no prior record exists. |
+| `statements.txt` | The shared statement(s) or situation, with identical wording for both agents. |
+| `starting-prompt.txt` | A copy of the shared discussion starting prompt linked above. |
 
-Replace `{{PERSONA_A}}` and `{{PERSONA_B}}` with the respective personas. Describe
-the intended perspective without requiring a particular conclusion. Keep each
-agent's actual initial judgment in its context, so persona and stance remain
-distinct inputs.
+The original combined [Agent A](../prompts/deliberation/agent-a.template.txt) and
+[Agent B](../prompts/deliberation/agent-b.template.txt) drafts remain as historical
+reference material. They are no longer direct CLI inputs. When migrating a filled
+copy, place its persona and recorded context into the separate files, move the
+discussion targets into `statements.txt`, and use the current starting prompt.
+This also replaces the old instructions about named assistant messages with the
+new speaker-labeled memory format. Template placeholders are never filled by the
+program.
 
-Replace `{{PREVIOUSLY_STORED_CONTEXT_A}}` and
-`{{PREVIOUSLY_STORED_CONTEXT_B}}` with each agent's own record. A useful layout is:
+Keep persona and initial stance distinct: describe the intended perspective in
+`persona.txt` without requiring a particular conclusion, and keep the actual
+initial judgment in `memory.txt`. A useful memory layout is:
 
 ```text
-Shared statement or situation: [Identical wording in both agents' records.]
 Interpretation and scope: [Definitions, time horizon, relevant conditions.]
 Previously recorded position: [The agent's position before this exchange.]
 Reasons and available evidence: [Arguments, observations, sources and dates.]
@@ -32,38 +39,39 @@ Uncertainty or unresolved questions: [Include only what was actually recorded.]
 Other relevant prior context: [Include only supplied material.]
 ```
 
-Select two records that actually disagree on the same target. If the records
-were produced independently, retain those originals before either agent sees
-the other's reply. Do not label the records independent when they share prior
-discussion. Missing material should stay explicitly unknown; filling a template
-is not permission to fabricate a memory.
+Select two records that actually disagree on the same target. Retain those
+originals before either agent sees the other's reply. Do not label the records
+independent when they share prior discussion. Missing material should stay
+explicitly unknown; filling a template is not permission to fabricate a memory.
 
-Only the public dialogue is shared by the runner. Each agent sees its own
-starting prompt and the accepted conversation, not the other's unshared persona
-or stored context. An agent may reveal parts of its context in its replies.
+Each agent sees its own persona and initial memory plus all accepted public
+replies. The runner adds each accepted reply to both agents' trial-specific
+archived memory, without modifying the original inputs. Thinking and rejected
+responses remain local to the detailed log. New runs start from their selected
+input files and never automatically read an earlier run's archive.
 
-For private material, save filled copies using ignored names such as
-`prompts/deliberation/agent-a.local.txt` and `prompts/deliberation/agent-b.local.txt`. The runner
-does not replace placeholders or retrieve memory automatically. After filling
-both copies, the existing command can select them:
+For private inputs, use directories under the already ignored `runs/` tree:
 
 ```sh
-python3 -m deepseek_dialogue run --agent-a prompts/deliberation/agent-a.local.txt --agent-b prompts/deliberation/agent-b.local.txt --max-messages 6
+python3 -m deepseek_dialogue run \
+  --agent-a runs/dialogue-inputs/agent-a \
+  --agent-b runs/dialogue-inputs/agent-b \
+  --max-messages 6
 ```
 
 Six alternating messages provide three contributions per agent for an initial
-pilot. That budget is a practical starting choice, not an optimum established
-by the papers. The command makes provider calls and sends the filled prompts
-and dialogue to DeepSeek. It has not been run for these templates.
+pilot. This is a practical starting choice, not an optimum established by the
+papers. The command sends the supplied inputs and accepted dialogue to DeepSeek.
+The new five-part request format has not been exercised live.
 
 The prompt's instruction to summarize a settled or stalled discussion does not
-stop the program. The current runner stops at its message budget; implementing
-an automatic agreement or stagnation detector is outside this prompt draft.
+stop the program. The runner stops at its message budget; an automatic agreement
+or stagnation detector remains outside this design.
 
 ## Evidence and design choices
 
 The papers were found through Undermind, and targeted full-text questions were
-used to check their methods and limitations on 2026-11-15. The instructions above
+used to check their methods and limitations on 2026-11-15. The discussion instructions
 are independently written adaptations, not copied paper prompts.
 
 | Evidence | Supported design choice | Boundary of the evidence |
@@ -94,7 +102,10 @@ comparable generation budget would help test whether any gain comes from
 interaction. This is a proposed evaluation, not a completed experiment. Compare
 agreement, accuracy where applicable, and unsupported changes separately.
 
-## Task evidence and recovery
+## Original prompt-draft evidence and recovery
+
+The following records the original combined-template task. The later five-part
+input implementation and its verification are recorded in [task evidence](task-evidence.md).
 
 Scope: two new task prompt templates and this companion repository document.
 No runtime, provider, dependency, credential, or configuration change is part of

@@ -10,18 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from . import api
+from . import api, inputs
 from .api import DialogueError
+from .inputs import GENERATION, GENERATION_DISABLED
 
 AGENTS = ("agent_a", "agent_b")
 LABELS = {"agent_a": "Agent A", "agent_b": "Agent B"}
-GENERATION = {
-    "thinking": {"type": "enabled"},
-    "reasoning_effort": "high",
-    "max_tokens": 8192,
-}
 PEER_LIMIT = 512
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 RESUME_TARGET = 20
 
 
@@ -36,18 +32,6 @@ def _integer(value: Any) -> bool:
 def _check_limit(value: int) -> None:
     if not _integer(value) or value == 0:
         raise DialogueError("The message limit must be a positive integer.")
-
-
-def _read_prompt(path: Path) -> str:
-    try:
-        prompt = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        raise DialogueError(
-            "Cannot read a starting-prompt file as UTF-8 text."
-        ) from None
-    if not prompt.strip():
-        raise DialogueError("Both starting-prompt files must contain text.")
-    return prompt
 
 
 def _usage(raw: Any) -> Dict[str, Any]:
@@ -78,22 +62,34 @@ def _usage(raw: Any) -> Dict[str, Any]:
     return result
 
 
-def _delivery_bound(usage: Dict[str, Any]) -> Optional[int]:
+def _delivery_bound(
+    usage: Dict[str, Any], generation: Optional[Dict[str, Any]] = None
+) -> Optional[int]:
+    generation = GENERATION if generation is None else generation
     usage = _usage(usage)
     prompt = usage.get("prompt_tokens")
     completion = usage.get("completion_tokens")
     total = usage.get("total_tokens")
-    reasoning = usage.get("completion_tokens_details", {}).get("reasoning_tokens")
+    details = usage.get("completion_tokens_details", {})
+    reasoning = details.get("reasoning_tokens") if isinstance(details, dict) else None
+    disabled = generation["thinking"]["type"] == "disabled"
+    if reasoning is None and disabled:
+        reasoning = 0
     if not all(_integer(n) for n in (prompt, completion, total, reasoning)):
         return None
-    if reasoning > completion or completion > GENERATION["max_tokens"]:
+    if disabled and reasoning != 0:
+        return None
+    if reasoning > completion or completion > generation["max_tokens"]:
         return None
     if total != prompt + completion:
         return None
     return completion - reasoning
 
 
-def _response(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
+def _response(
+    raw: Dict[str, Any], generation: Optional[Dict[str, Any]] = None
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    generation = GENERATION if generation is None else generation
     record = {
         "word_counts": {"message": None, "thinking": None},
         "usage": (
@@ -131,7 +127,9 @@ def _response(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
         return record, "incomplete_response"
     if not record.get("content", "").strip():
         return record, "empty_final_message"
-    bound = _delivery_bound(record["usage"])
+    if generation["thinking"]["type"] == "disabled" and record.get("reasoning_content"):
+        return record, "unexpected_reasoning_content"
+    bound = _delivery_bound(record["usage"], generation)
     if bound is None:
         return record, "missing_or_inconsistent_usage"
     record["non_reasoning_token_bound"] = bound
@@ -140,22 +138,87 @@ def _response(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
     return record, None
 
 
-def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
-    """Only complete starting instructions and accepted dialogue reach a model."""
-    settings = state["settings"]["agents"][agent]
-    messages = [{"role": "system", "content": settings["prompt"]}]
-    messages.extend(
-        {"role": "assistant", "name": item["sender"], "content": item["content"]}
-        for item in state["messages"]
+def _generation(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
+    if state["format_version"] == 1:
+        return state["settings"]["generation"]
+    config = state["settings"]["agents"][agent]["model_config"]
+    return {key: value for key, value in config.items() if key != "model"}
+
+
+def _memory(state: Dict[str, Any], agent: str) -> str:
+    """Rebuild memory exactly once per accepted turn, including the opening turn."""
+    initial = state["settings"]["agents"][agent]["inputs"]["memory"]
+    transcript = "\n\n".join(
+        "[" + item["sender"] + "]\n" + item["content"] for item in state["messages"]
     )
+    return "Initial memory:\n" + initial + "\n\nDialogue so far:\n" + transcript
+
+
+def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
+    """Assemble five file-backed parts; accepted public replies extend memory."""
+    settings = state["settings"]["agents"][agent]
+    if state["format_version"] == 1:
+        # Resume historical runs with their original request structure.
+        messages = [{"role": "system", "content": settings["prompt"]}]
+        messages.extend(
+            {"role": "assistant", "name": item["sender"], "content": item["content"]}
+            for item in state["messages"]
+        )
+        return {
+            "model": settings["model"],
+            **copy.deepcopy(_generation(state, agent)),
+            "messages": messages,
+            "stream": False,
+        }
+
+    parts = settings["inputs"]
+    model_config = copy.deepcopy(settings["model_config"])  # 1. API settings
+    persona = parts["persona"]  # 2. This agent's identity and perspective
+    memory = _memory(state, agent)  # 3. Initial memory plus accepted turns
+    statements = parts["statements"]  # 4. The discussion target(s)
+    starting_prompt = parts["starting_prompt"]  # 5. Discussion instructions
     return {
-        "model": settings["model"],
-        "messages": messages,
-        "thinking": dict(GENERATION["thinking"]),
-        "reasoning_effort": GENERATION["reasoning_effort"],
-        "max_tokens": GENERATION["max_tokens"],
+        **model_config,
+        "messages": [
+            {"role": "system", "content": persona},
+            {
+                "role": "user",
+                "content": "Memory:\n"
+                + memory
+                + "\n\nStatements:\n"
+                + statements
+                + "\n\nStarting prompt for discussion:\n"
+                + starting_prompt,
+            },
+        ],
         "stream": False,
     }
+
+
+def _save_memory(path: Path, state: Dict[str, Any]) -> None:
+    """Export derived memory after the authoritative JSON snapshot is saved."""
+    if state["format_version"] == 1:
+        return
+    directory = path.parent / "archive" / path.stem
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for agent in AGENTS:
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=directory,
+                prefix=".memory-",
+                delete=False,
+            ) as stream:
+                temporary = Path(stream.name)
+                stream.write(_memory(state, agent))
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(str(temporary), str(directory / (agent + ".memory.txt")))
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
 
 
 def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
@@ -176,6 +239,7 @@ def _save(path: Path, state: Dict[str, Any], keys: Dict[str, str]) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(str(temporary), str(path))
+        _save_memory(path, state)
     except OSError:
         raise DialogueError(
             "Cannot save the run. No further requests will be made; retain the last saved snapshot."
@@ -238,23 +302,31 @@ def _chat_lock(path: Path):
 def _read_state(path: Path) -> Dict[str, Any]:
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(state, dict) or state.get("format_version") != FORMAT_VERSION:
+        if not isinstance(state, dict) or state.get("format_version") not in (1, 2):
             raise ValueError()
         if not isinstance(state["trial_id"], str):
             raise ValueError()
         settings = state["settings"]
-        if (
-            settings["generation"] != GENERATION
-            or settings["peer_max_tokens"] != PEER_LIMIT
-        ):
+        if settings["peer_max_tokens"] != PEER_LIMIT:
             raise ValueError()
         for agent in AGENTS:
             agent_config = settings["agents"][agent]
-            for field in ("prompt", "model"):
-                if (
-                    not isinstance(agent_config[field], str)
-                    or not agent_config[field].strip()
-                ):
+            if state["format_version"] == 1:
+                if settings["generation"] not in (GENERATION, GENERATION_DISABLED):
+                    raise ValueError()
+                for field in ("prompt", "model"):
+                    if (
+                        not isinstance(agent_config[field], str)
+                        or not agent_config[field].strip()
+                    ):
+                        raise ValueError()
+            else:
+                inputs.validate_parts(agent_config["inputs"])
+                expected = inputs.model_config(
+                    agent_config["inputs"]["model_config"],
+                    settings["thinking_override"],
+                )
+                if agent_config["model_config"] != expected:
                     raise ValueError()
         if not isinstance(state["messages"], list) or not isinstance(
             state["attempts"], list
@@ -308,11 +380,13 @@ def _read_state(path: Path) -> Dict[str, Any]:
                 or result.get("finish_reason") != "stop"
             ):
                 raise ValueError()
-            bound = _delivery_bound(_usage(result.get("usage")))
+            bound = _delivery_bound(
+                _usage(result.get("usage")), _generation(state, item["sender"])
+            )
             if bound is None or bound > PEER_LIMIT:
                 raise ValueError()
         return state
-    except (OSError, ValueError, TypeError, KeyError, UnicodeError):
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, DialogueError):
         raise DialogueError(
             "Cannot read this run: it is unreadable, incomplete, or incompatible."
         ) from None
@@ -405,6 +479,11 @@ def _execute(
         _save(path, state, keys)
         emit("Chat ID: " + state["trial_id"])
         emit("Saved trial: " + str(path.resolve()))
+        if state["format_version"] == 2:
+            emit(
+                "Memory archive: "
+                + str((path.parent / "archive" / path.stem).resolve())
+            )
         emit(
             "Progress: "
             + str(len(state["messages"]))
@@ -427,7 +506,7 @@ def _execute(
             try:
                 raw = api.complete(_payload(state, agent), keys[agent])
                 api.ensure_no_keys(raw, keys)
-                record, failure = _response(raw)
+                record, failure = _response(raw, _generation(state, agent))
                 pending["response"] = record
                 pending["finished_at"] = now()
                 if failure:
@@ -537,19 +616,18 @@ def _execute(
 def run_dialogue(
     agent_a_path: Path,
     agent_b_path: Path,
-    model_a: str,
-    model_b: str,
     max_messages: int,
     keys_file: Path,
     output_dir: Path,
     emit: Callable[[str], None],
+    thinking: Optional[str] = None,
 ) -> Path:
     _check_limit(max_messages)
+    agents = {
+        "agent_a": inputs.load_agent(agent_a_path, thinking),
+        "agent_b": inputs.load_agent(agent_b_path, thinking),
+    }
     keys = api.load_keys(keys_file)
-    if not all(
-        isinstance(model, str) and model.strip() for model in (model_a, model_b)
-    ):
-        raise DialogueError("Both agents need a model name.")
     state = {
         "format_version": FORMAT_VERSION,
         "trial_id": uuid.uuid4().hex,
@@ -557,11 +635,8 @@ def run_dialogue(
         "created_at": now(),
         "status": "running",
         "settings": {
-            "agents": {
-                "agent_a": {"prompt": _read_prompt(agent_a_path), "model": model_a},
-                "agent_b": {"prompt": _read_prompt(agent_b_path), "model": model_b},
-            },
-            "generation": copy.deepcopy(GENERATION),
+            "agents": agents,
+            "thinking_override": thinking,
             "peer_max_tokens": PEER_LIMIT,
         },
         "new_message_limit": max_messages,
@@ -589,6 +664,12 @@ def resume_dialogue(
         state = _read_state(path)
         count = len(state["messages"])
         if count >= RESUME_TARGET:
+            try:
+                _save_memory(path, state)
+            except OSError:
+                raise DialogueError(
+                    "Cannot rebuild the memory archive. No API requests were made."
+                ) from None
             emit(
                 "Chat already has "
                 + str(count)

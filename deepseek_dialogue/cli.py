@@ -52,23 +52,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    run = commands.add_parser("run", help="start a dialogue from two full prompt files")
+    run = commands.add_parser(
+        "run", help="start a dialogue from five text files per agent"
+    )
     run.add_argument(
         "--agent-a",
         type=Path,
-        default=Path("prompts/examples/bird-first.txt"),
-        metavar="FILE",
-        help="Agent A complete starting prompt (default: prompts/examples/bird-first.txt)",
+        default=Path("prompts/examples/bird-first"),
+        metavar="DIR",
+        help="Agent A five-part input directory (default: prompts/examples/bird-first)",
     )
     run.add_argument(
         "--agent-b",
         type=Path,
-        default=Path("prompts/examples/egg-first.txt"),
-        metavar="FILE",
-        help="Agent B complete starting prompt (default: prompts/examples/egg-first.txt)",
+        default=Path("prompts/examples/egg-first"),
+        metavar="DIR",
+        help="Agent B five-part input directory (default: prompts/examples/egg-first)",
     )
-    run.add_argument("--model-a", default="deepseek-flash")
-    run.add_argument("--model-b", default="deepseek-flash")
+    run.add_argument(
+        "--thinking",
+        choices=("enabled", "disabled"),
+        default=None,
+        help="override both agents' file-based thinking settings for this run",
+    )
     _add_run_options(run)
 
     resume = commands.add_parser(
@@ -96,12 +102,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             engine.run_dialogue(
                 agent_a_path=args.agent_a,
                 agent_b_path=args.agent_b,
-                model_a=args.model_a,
-                model_b=args.model_b,
                 max_messages=args.max_messages,
                 keys_file=args.keys_file,
                 output_dir=args.output_dir,
                 emit=print,
+                thinking=args.thinking,
             )
         elif args.command == "resume":
             chat_id = args.chat_id
