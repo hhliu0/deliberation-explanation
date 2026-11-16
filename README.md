@@ -29,12 +29,12 @@ Edit the five files in ratings/prompt/agent_a or ratings/prompt/agent_b, then
 select one agent:
 
 ~~~sh
-python3 -m ratings.source --agent agent_a --trial-name "skeptic ratings" --enable-thinking
+python3 -m ratings.source --agent agent_a --trial-name "skeptic ratings" --enable-thinking --simulations 1
 ~~~
 
 Use --agent agent_b for Agent B, or --not-enable-thinking to disable thinking.
-Each invocation makes at most one request and saves one named JSON file in
-ratings/archive.
+--simulations repeats that same setup; 1 runs it once. Each run makes at most
+one request and saves one named JSON file in ratings/archive.
 
 Both programs use the root keys.local.env file. Dialogue uses the A and B keys;
 ratings reads DEEPSEEK_API_KEY_A directly from that file. The separate ratings

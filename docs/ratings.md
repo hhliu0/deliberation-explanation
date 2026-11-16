@@ -1,7 +1,7 @@
 # Independent agent ratings
 
 `ratings.source` rates a statement list using one selected agent and one API
-key. Each invocation builds a fresh request from five text files and saves one
+key. Each simulation builds a fresh request from five text files and saves one
 ordered JSON result. Agent A and Agent B have separate input folders; a run uses
 only the selected agent. The dialogue and ratings packages remain independent.
 
@@ -35,11 +35,12 @@ Run from the project directory using Python 3.9 or later. Default prompt, archiv
 and key paths are anchored to the project location:
 
 ```sh
-python3 -m ratings.source --agent agent_a --trial-name "skeptic ratings" --enable-thinking
-python3 -m ratings.source --agent agent_b --trial-name "extrapolator ratings" --not-enable-thinking
+python3 -m ratings.source --agent agent_a --trial-name "skeptic ratings" --enable-thinking --simulations 1
+python3 -m ratings.source --agent agent_b --trial-name "extrapolator ratings" --not-enable-thinking --simulations 1
 ```
 
-`--agent`, a nonblank `--trial-name`, and exactly one thinking flag are required.
+`--agent`, a nonblank `--trial-name`, `--simulations N`, and exactly one thinking flag are required.
+`--simulations` repeats the same setup N times.
 `--prompts-dir DIR` changes the parent containing the `agent_a` and `agent_b`
 folders. `--output-dir DIR` changes the archive destination. The old persona/YAML
 input options and `--thinking` option have been replaced by these arguments.
