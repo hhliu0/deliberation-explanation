@@ -1,0 +1,52 @@
+{
+  "statements": [
+    {
+      "id": "s1",
+      "text": "Even if AI systems come to do most research and development, technological progress will stay gradual rather than becoming more than ten times faster within five years."
+    },
+    {
+      "id": "s2",
+      "text": "By 2044, advanced AI systems will likely have goals that conflict with human interests in ways humans cannot reliably correct."
+    },
+    {
+      "id": "s3",
+      "text": "Reducing the risk of human extinction from AI should be a global priority alongside pandemics and nuclear war."
+    },
+    {
+      "id": "s4",
+      "text": "AI is worsening social problems such as misinformation, discrimination and economic inequality."
+    },
+    {
+      "id": "s5",
+      "text": "If it applied equally to all developers, global AI progress over the next five years should be slower than it is now."
+    },
+    {
+      "id": "s6",
+      "text": "Advanced AI should not be developed unless humans can reliably keep meaningful control over it, including the ability to override and shut it down."
+    },
+    {
+      "id": "s7",
+      "text": "Concentrating advanced AI development in a few tightly controlled organizations is preferable to wide availability, because it makes risks easier to manage."
+    },
+    {
+      "id": "s8",
+      "text": "AI companies should be left to manage risks to users, such as manipulation, addiction and harm to children, through their own safety practices rather than face legal liability and independent oversight."
+    },
+    {
+      "id": "s9",
+      "text": "AI should be designed to empower people and protect their liberty, privacy and agency, not to curtail or replace them."
+    },
+    {
+      "id": "s10",
+      "text": "The public's concerns about potential future AI risks, such as loss of control or extinction, largely stem from misunderstandings of AI."
+    },
+    {
+      "id": "s11",
+      "text": "Society should devote more attention, discussion and resources to reducing AI's current risks and harms than to potential future existential or catastrophic risks. (3 = both deserve about equal focus)"
+    },
+    {
+      "id": "s12",
+      "text": "The direction and pace of AI progress are driven mainly by competitive and technological forces, not by human choices."
+    }
+  ]
+}

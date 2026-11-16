@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+keys.local.env
+*.local.env
+/backups/
+/dialogue/archive/
+/ratings/archive/
+*.local.txt
+Individual research note.docx
+.venv/
+*.local.yaml
