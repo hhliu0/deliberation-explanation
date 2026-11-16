@@ -230,7 +230,8 @@ folders. New runs do not read them automatically. The private
 
 This project has no automated test suite, simulated model runner, or CI. The
 new five-file payload/JSON workflow is checked locally and reviewed independently;
-it has not been exercised with a live provider request. Earlier live YAML-era
+on 2026-11-16 both agents completed live ratings using their full memories from
+a 10-round dialogue, with thinking disabled. Earlier live YAML-era
 results are documented in [task evidence](task-evidence.md).
 
 The implementation and documentation retain the repository's [MIT License](../LICENSE).

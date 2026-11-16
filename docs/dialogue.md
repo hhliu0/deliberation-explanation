@@ -32,8 +32,9 @@ python3 -m dialogue.source run --trial-name "handshake" --enable-thinking --max-
 ```
 
 A four-message live handshake using the earlier complete-prompt format was
-verified on 2026-11-15. The five-part request format below has been checked
-locally but has not yet been exercised against the live provider.
+verified on 2026-11-15. On 2026-11-16, the five-part request format completed
+20 live non-thinking replies in the combined dialogue-to-ratings workflow.
+See [task evidence](task-evidence.md) for the command and verification.
 
 ## Five input files per agent
 

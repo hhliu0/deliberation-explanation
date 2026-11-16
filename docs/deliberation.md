@@ -62,7 +62,9 @@ python3 -m dialogue.source run --trial-name "deliberation" --enable-thinking --m
 Six alternating messages provide three contributions per agent for an initial
 pilot. This is a practical starting choice, not an optimum established by the
 papers. The command sends the supplied inputs and accepted dialogue to DeepSeek.
-The new five-part request format has not been exercised live.
+The five-part format completed a live 10-round, 20-reply dialogue followed by
+both agents' ratings on 2026-11-16, with thinking disabled. See the
+[combined workflow](../README.md#deliberate-then-rate-with-the-resulting-memory).
 
 The prompt's instruction to summarize a settled or stalled discussion does not
 stop the program. The runner stops at its message budget; an automatic agreement

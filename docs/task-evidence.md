@@ -1674,3 +1674,35 @@ Pre-live verification:
   No routing performance comparison is claimed.
 
 Live execution and final verification are recorded below after completion.
+
+Live result (after implementation checkpoint a01670f):
+- Exact command: python3 -u deliberate_and_rate.py --rounds 10 --trials 1
+  --trial-name skeptic-extrapolator-10-rounds. Exit status 0. One full trial ran;
+  no retries, extra experiments, or 100-trial batch was executed.
+- Dialogue ID c2b6db26719e47dba55c7dca8134dabf: 20 accepted alternating replies,
+  10 per agent, using all 12 statements. Started 2026-11-16T10:47:10.814083Z,
+  ended 10:48:02.138530Z. Final rating ended 10:48:04.717622Z: about 54 seconds
+  for the live workflow, excluding implementation/review/checks.
+- Agent A rating ID b6c4e7ccb3384d62a37b23bd26a522c6; Agent B rating ID
+  f4695073ac164ead86607f975c884f3b. Each contains 12 non-null valid Likert ratings
+  numbered 1-12 in the original order. Their full dialogue ID is in the trial
+  names. Results remain in the existing Git-ignored archive folders.
+- PYTHONPATH=. python3
+  /private/tmp/deliberation-ratings-recovery-20261116/verify_live.py passed:
+  exact message count/order, completed snapshots, disabled thinking, valid
+  complete ratings, matching statement text/order, and both 24,075-character
+  effective memories checked against an independently assembled initial-memory
+  plus all accepted replies. Each includes the final Agent B reply; the two
+  memories retain their distinct original starting order. Original prompt inputs
+  still match their saved snapshots; original memory files were not overwritten.
+- Dialogue provider totals printed: 86,612 input + 5,021 output = 91,633 tokens.
+  Rating message tokens: A 134, B 133. Rating input usage is not retained in the
+  existing JSON projection and was not printed by this workflow; total combined
+  usage and cost are unknown. All saved thinking-token counts are zero; dialogue
+  terminal reports reasoning as unknown when the provider omits that field,
+  while the established disabled-mode archive convention records zero.
+- The independent reviewer verified the blank-name fix in a01670f and reported
+  no remaining actionable findings. The lead independently verified the real
+  archives; this is execution evidence, not proof of psychological source
+  confusion or improved belief quality. No push, PR, deployment, or shared-branch
+  merge occurred.
