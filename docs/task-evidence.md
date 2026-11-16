@@ -1706,3 +1706,59 @@ Live result (after implementation checkpoint a01670f):
   archives; this is execution evidence, not proof of psychological source
   confusion or improved belief quality. No push, PR, deployment, or shared-branch
   merge occurred.
+
+## Repeated dialogues versus individual benchmarks (2026-11-16)
+
+The user authorized another 19 executions of the same 10-round workflow and
+comparison with the saved Skeptic and Extrapolator benchmark PDFs. After one
+reply hit the existing 512-token limit, the user explicitly chose replacement
+attempts until there are 20 complete trials including the original. Failures
+remain recorded and are excluded from rating comparisons; no prompt, response
+limit, provider, credential, or thinking setting changes during collection.
+
+Baseline is 3d3d22a with clean tracked files/index; unrelated untracked
+complementation_note/ is untouched. Work uses codex/dialogue-benchmark-analysis.
+Baseline head/status and hashes of all 20 prompt inputs are recorded in
+/private/tmp/dialogue-batch19-20261116/. Revert the analysis/evidence commits to
+restore source/docs; retain generated Git-ignored trial archives independently.
+The existing shared research purpose and MIT license remain unchanged.
+
+The two named PDFs are ratings/archive/skeptic bench/skeptic-bench.pdf and
+ratings/archive/extrapolator bench/extrapolator-bench.pdf. Each summarizes 200
+complete independent rating runs, with 12 matching statements and thinking
+disabled. Both underlying sets of 200 JSON files are available and checked.
+Their memories are blank. Their rating instructions lack the new own-memory/
+current-views language, and Extrapolator's old persona lacks the added Agent B
+identity. These are combined-condition comparisons, not an isolated causal
+effect of dialogue or a paired pre/post measurement. The dialoguing agents'
+fixed starting rating vectors are retained separately in the analysis.
+
+Analysis uses 1-5 Likert coding, per-statement distributions and mean shifts,
+absolute profile shifts, modal-category comparisons, and between-agent gaps.
+All reported variances are recalculated consistently as sample variances:
+Skeptic PDF uses population variance while Extrapolator PDF uses sample variance.
+The 10,000-replicate bootstrap resamples whole 12-statement vectors, preserves
+paired post-dialogue agents, independently resamples benchmark agents, and is
+conditional on the fixed 12 statements and successful completion. Absolute-shift
+intervals are descriptive and not used as a test against zero. No arbitrary
+pairing of the 200-per-agent benchmarks or pseudoreplication of their 40,000
+cross-products is used for uncertainty.
+
+analysis/compare_dialogue_benchmarks.py retains validated numerical results and
+source hashes; analysis/plot_dialogue_benchmarks.py renders a static research
+figure. Outputs go under ratings/archive/dialogue-benchmark-comparison/.
+They use the already available bundled Python runtime at
+/Users/lollafox/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
+(NumPy, ReportLab). No packages or tools were installed or configured.
+
+Read-only PDF extraction/audit used gpt-6-luna/high, including visual inspection
+of all four PDF pages. The lead independently inspected both summary pages and
+checked raw input/condition differences. Independent gpt-6.1-sol/xhigh review
+verified the statistical design and 14 direct numerical/source checks, including
+all 400 baseline rating vectors and all-pairs gap/agreement calculations. Its
+cohort-hardening suggestions (mandatory original in the complete cohort and
+unique/disjoint rating IDs) were implemented. Lead direct metric checks and
+existing Black formatting passed. No test suite, simulated model runner,
+dependencies, security-control changes, push, or deployment was introduced.
+Lead exact model/effort, agent elapsed time and total assistant usage/cost are
+unknown. Final collection and numerical results will be recorded below.
