@@ -1610,3 +1610,67 @@ Verification:
   blockers. Lead exact model/effort, elapsed time and all usage/cost are unknown.
 - Automated suite cases collected/executed: zero, following project policy.
   No simulated runner, live provider call, installation, push, PR or deployment.
+
+## Dialogue memory followed by ratings, with repeated trials (2026-11-16)
+
+The user requested the existing Skeptic/Extrapolator dialogue over the existing
+12 statements, followed by one rating per agent using its complete final memory.
+After clarification the requested budget is 10 rounds (20 alternating replies),
+with thinking disabled throughout. The user explicitly authorized one live run,
+and then requested --trials N to repeat the entire experiment (examples 1, 2,
+100). The default is one trial; 100 trials have not been authorized for execution.
+Shared research use and MIT licensing remain unchanged. No external code reused.
+
+Baseline: detached HEAD at 1fcb1bd, clean index/tracked files, unrelated untracked
+complementation_note/ preserved without inspection. Work uses
+codex/deliberate-then-rate. Baseline commit/status and empty staged/unstaged diffs
+were saved in /private/tmp/deliberation-ratings-recovery-20261116/ before edits.
+Reverting this task's commits restores prior source/prompts/docs; newly generated
+Git-ignored results may be retained independently. No existing archive is edited.
+
+Changes: deliberate_and_rate.py validates matching 12-statement inputs, runs
+2 * rounds accepted dialogue replies, and supplies each agent's exact initial
+memory plus every accepted public reply to ratings.engine.run(memory=...). Both
+stages share the byte-preserving blend_memory helper. Supplied memory is saved
+as the effective inputs.memory.txt without rewriting prompt files during runs.
+The rating instructions call the Memory section the agent's own memory and ask
+for current views; no imported/new memory labels or summaries are inserted.
+Speaker labels remain, including Agent B's explicit identity in its rating
+persona. Dialogue instructions request coverage of the full statement list.
+This framing does not demonstrate empirical source confusion.
+
+--rounds defaults to 10; --trials defaults to 1. Repetitions are sequential,
+independent, and uniquely archived; the dialogue ID links each pair of rating
+trial names. Incomplete dialogue prevents ratings; rejected rating trials keep
+the existing null-rating behavior and both agents are attempted before stopping
+the batch. Unhandled stage errors or interrupts stop subsequent trials. The
+--check option validates inputs once without contacting the provider.
+No provider, credential/security controls, dependencies, formatter settings,
+agent tooling, licensing, or original statement/baseline-memory files changed.
+
+Pre-live verification:
+- python3 -m black deliberate_and_rate.py dialogue/source/engine.py
+  ratings/source/engine.py, then the same command with --check: three files pass.
+  Existing Black 25.11.0 was used; no setup or installation.
+- python3 deliberate_and_rate.py --rounds 10 --trials 100 --check: matching actual
+  inputs pass, reports 10 rounds/20 replies, 12 statements, disabled thinking.
+  --help displays both rounds and trials options/defaults.
+- PYTHONPATH=. python3
+  /private/tmp/deliberation-ratings-recovery-20261116/verify.py: 43 direct checks
+  passed. Covers syntax; exact memory equality with baseline 1fcb1bd's _memory
+  for four edge cases; actual prompt consistency; payloads; mismatched count,
+  ordering and text; CLI routing 1/2/100; failure/interrupt/check-only behavior;
+  invalid counts; blank batch names. CLI routing uses a function-call spy only,
+  with no provider responses, model simulation, credential access, or trial run.
+- git diff --check passed. No persistent test suite or local test pipeline was
+  added; automated suite cases collected/executed: zero. Live results below are
+  the end-to-end validation rather than simulated model output.
+- Independent gpt-6-luna/high read-only inspection checked existing interfaces.
+  Independent gpt-6.1-sol/xhigh reviewer checked the workflow, engines, prompts,
+  docs, and batch behavior; its only finding (blank base trial names gaining a
+  nonblank batch suffix) was fixed and directly checked before the live run.
+  Lead owns planning, implementation, integration and final verification.
+  Lead exact model/effort, per-agent elapsed time and total usage/cost are unknown.
+  No routing performance comparison is claimed.
+
+Live execution and final verification are recorded below after completion.

@@ -1,6 +1,6 @@
 # DeepSeek research tools
 
-Two independent terminal tools share this repository. Each starts a fresh trial,
+Two terminal tools and a combined workflow share this repository. Each starts a fresh trial,
 saves only its JSON result inside its archive, and prints terminal summaries.
 Neither has a resume or historical-inspection command or reads old trial files.
 New runs create no separate report, score, or backup outputs.
@@ -9,6 +9,48 @@ New runs create no separate report, score, or backup outputs.
 | --- | --- | --- |
 | Dialogue between two agents | dialogue/source | [Dialogue](docs/dialogue.md) |
 | Statement ratings from one agent | ratings/source | [Ratings](docs/ratings.md) |
+
+## Deliberate, then rate with the resulting memory
+
+From the project root, run:
+
+~~~sh
+python3 deliberate_and_rate.py --rounds 10 --trials 1
+~~~
+
+This runs the existing Skeptic (Agent A) and Extrapolator (Agent B) for **10
+rounds: 20 alternating replies**, discussing the existing 12 statements. It then
+rates all 12 statements once per agent. Thinking is disabled for every request;
+there is no thinking switch in this workflow. Ten rounds is also the default.
+Use `--trial-name "NAME"` to name the experiment, or add `--check` to validate
+the inputs without contacting the provider.
+
+Set `--trials 2` or `--trials 100` to repeat the entire experiment that many
+times. Each trial starts a fresh dialogue from the original prompt memories,
+then makes one rating request per agent; memory does not carry between trials.
+`--trials` defaults to 1. A complete trial uses 22 provider requests at 10 rounds
+(20 dialogue replies + 2 ratings). Trials run sequentially, with their batch
+position in the trial name, and the batch stops if an experiment fails or is
+interrupted.
+
+Each rating receives that agent's exact starting dialogue memory followed by
+all accepted public replies, including the final reply, in the same single
+`Memory` section used during dialogue. Speaker labels remain; no imported/new
+memory labels, summaries, or provenance instructions are added. The rating prompt
+calls this the agent's own memory and asks for its current views. This presents
+the intended memory framing; it does not establish that the model experiences
+source confusion.
+
+The workflow checks that both stages use the same 12 statement IDs, text, and
+order. An incomplete dialogue stops the workflow before ratings. A rejected
+rating is saved using the existing null-rating behavior, the other agent is
+still attempted, and the command exits with failure. There are no automatic
+retries. Original input files are never rewritten by a run.
+
+One dialogue JSON is saved in `dialogue/archive/` and two rating JSON files in
+`ratings/archive/`. Rating trial names contain the source dialogue ID, and their
+`inputs.memory.txt` fields contain the actual full memory used. Re-running the
+command starts a fresh dialogue and creates new results.
 
 ## Run a dialogue
 
@@ -64,6 +106,7 @@ ratings/
   archive/                   ratings JSON results
   requirements.txt           unchanged historical YAML dependency manifest
 docs/
+deliberate_and_rate.py        dialogue followed by both agents' ratings
 .gitignore
 keys.local.env
 LICENSE

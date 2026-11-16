@@ -3,7 +3,9 @@
 `ratings.source` rates a statement list using one selected agent and one API
 key. Each simulation builds a fresh request from five text files and saves one
 ordered JSON result. Agent A and Agent B have separate input folders; a run uses
-only the selected agent. The dialogue and ratings packages remain independent.
+only the selected agent. The combined `deliberate_and_rate.py` workflow runs a
+dialogue first, then invokes ratings once for each agent with its final memory.
+See the [one-command workflow](../README.md#deliberate-then-rate-with-the-resulting-memory).
 
 ## Inputs and first run
 
@@ -61,7 +63,11 @@ The retained `ratings/requirements.txt` describes the earlier YAML environment.
 All files are UTF-8 and are read once. Only `memory.txt` may be blank. Inputs are
 snapshotted into the JSON result and are never rewritten by a run. There is no
 automatic history loading, memory summarization, template replacement, or input
-truncation. Memory contains only the selected file's supplied text.
+truncation. Standalone ratings use only the selected file's supplied memory.
+The combined workflow supplies `engine.run(memory=...)` instead: this replaces
+the in-memory rating input with the agent's starting dialogue memory plus all
+accepted public replies. The exact resulting text is used in the request and
+saved under `inputs.memory.txt`; the on-disk prompt files remain unchanged.
 
 For example, `model-config.txt` can contain:
 
@@ -186,7 +192,8 @@ Each JSON contains only these fields in this exact order:
 7. `agent_message`: `agent_name`, `message`, `thinking`, `message_token_count`,
    `thinking_token_count`, in that order.
 8. `inputs`: `model-config.txt`, `persona.txt`, `memory.txt`, `statements.txt`,
-   `starting-prompt.txt`, in that order, with the original text as each value.
+   `starting-prompt.txt`, in that order, with the input text as each value (the
+   effective supplied memory when the combined workflow overrides `memory.txt`).
 
 `agent_name` is `Agent A` or `Agent B`, corresponding to the selected
 `agent_a` or `agent_b` folder. Each rating
@@ -199,7 +206,7 @@ empty string remains empty.
 Timestamps are UTC ISO 8601 strings. The end time is `null` while running and
 set on completion, failure, or handled interruption. Abrupt termination or an
 unsuccessful final save can leave a null end time. Original input files are
-never modified, and the initial memory is saved exactly as loaded.
+never modified, and the effective memory is saved exactly as used.
 
 Message token count uses provider completion tokens minus reasoning and separately
 reported safety tokens. Thinking count uses the provider's reasoning count;

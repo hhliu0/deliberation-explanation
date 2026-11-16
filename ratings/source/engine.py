@@ -3,7 +3,7 @@
 import copy
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from . import api
 from .inputs import AGENTS, load_agent
@@ -40,8 +40,9 @@ def run(
     keys_file: Path,
     output_dir: Path,
     emit: Callable[[str], None] = print,
+    memory: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Validate inputs, make one rating request, and save its ordered JSON result."""
+    """Run one rating, optionally using supplied memory in place of memory.txt."""
     if agent_id not in AGENTS:
         raise api.RatingError("Choose agent_a or agent_b.")
     if not isinstance(trial_name, str) or not trial_name.strip():
@@ -49,6 +50,10 @@ def run(
     if thinking not in ("enabled", "disabled"):
         raise api.RatingError("Choose whether to enable thinking for this trial.")
     agent = load_agent(input_dir, thinking)
+    if memory is not None:
+        if not isinstance(memory, str):
+            raise api.RatingError("Supplied memory must be text.")
+        agent["inputs"]["memory"] = memory
     statements = agent["statements"]
     key = api.load_key(keys_file)
     payload = build_payload(agent)

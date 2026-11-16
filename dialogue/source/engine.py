@@ -3,7 +3,7 @@
 import copy
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 from . import api, inputs, records, reporting, usage
 from .api import DialogueError
@@ -80,13 +80,20 @@ def _generation(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
     return {key: value for key, value in config.items() if key != "model"}
 
 
-def _memory(state: Dict[str, Any], agent: str) -> str:
-    """Combine the agent's initial memory with all accepted, speaker-labeled replies."""
-    initial = state["settings"]["agents"][agent]["inputs"]["memory"]
+def blend_memory(initial: str, messages: Iterable[Tuple[str, str]]) -> str:
+    """Append accepted, speaker-labeled replies without marking a memory boundary."""
     transcript = "\n\n".join(
-        "[" + item["sender"] + "]\n" + item["content"] for item in state["messages"]
+        "[" + speaker + "]\n" + content for speaker, content in messages
     )
     return initial + ("\n\n" if initial and transcript else "") + transcript
+
+
+def _memory(state: Dict[str, Any], agent: str) -> str:
+    """Combine the agent's initial memory with all accepted, speaker-labeled replies."""
+    return blend_memory(
+        state["settings"]["agents"][agent]["inputs"]["memory"],
+        ((item["sender"], item["content"]) for item in state["messages"]),
+    )
 
 
 def _payload(state: Dict[str, Any], agent: str) -> Dict[str, Any]:
@@ -144,7 +151,7 @@ def _execute(
             }
             state["attempts"].append(pending)
             records.save(path, state, keys)
-            emit(LABELS[agent] + " is thinking...")
+            emit(LABELS[agent] + " is replying...")
             try:
                 raw = api.complete(_payload(state, agent), keys[agent])
                 api.ensure_no_keys(raw, keys)

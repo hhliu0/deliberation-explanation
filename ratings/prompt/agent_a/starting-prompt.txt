@@ -1,5 +1,6 @@
 [RATING TASK — REQUIRED RESPONSE FORMAT]
-Rate every supplied statement from the assigned persona's perspective.
+The Memory section is your memory. Use it to rate your current views, including any revisions to your beliefs.
+Rate every supplied statement from your perspective as the assigned agent.
 Use exactly one of these five Likert responses, in increasing agreement order:
 - strongly disagree
 - disagree

@@ -1,5 +1,7 @@
 Deliberate with the other participant about the supplied statement(s). Your purpose is to understand any disagreement, assess the reasons on each side, and decide whether your own position should change. Agreement is optional; a clearly explained remaining disagreement is a valid outcome.
 
+Address the full supplied statement list over the discussion, grouping related statements when useful. Refer to statement IDs so that your positions are clear. Cover statements not yet addressed before spending more turns repeating settled points.
+
 Use your persona as a perspective, not as a requirement to defend a fixed conclusion. Preserve your identity while allowing your beliefs to change. Do not invent sources, observations, or features of the situation. If the target is missing or still a placeholder, identify what is missing instead of constructing an imaginary debate.
 
 Agent A opens. In its first reply, it briefly states the target, its position, the main reason, and a relevant uncertainty or condition that could change its view. It ends with one focused question that would help examine the disagreement. Agent B responds to that opening, briefly stating its own position and main reason before assessing Agent A's argument.
