@@ -219,15 +219,21 @@ def analyze(expected_complete, bootstrap_replicates, output):
             manifest.append(source_record(p, "post-dialogue " + agent))
             info[agent + "_rating_id"] = r["trial_id"]
         complete.append(info)
-    assert len(complete) == expected_complete, (len(complete), expected_complete)
+    assert expected_complete >= 2
+    assert len(complete) >= expected_complete, (len(complete), expected_complete)
+    available_complete = len(complete)
+    extra_complete = complete[expected_complete:]
+    complete = complete[:expected_complete]
     assert ORIGINAL_ID in {trial["dialogue_id"] for trial in complete}
-    post = {a: np.array(v) for a, v in post.items()}
+    post = {a: np.array(v[:expected_complete]) for a, v in post.items()}
     n = len(complete)
     assert n >= 2
     rng = np.random.default_rng(20261116)
     pair_indices = rng.integers(0, n, size=(bootstrap_replicates, n))
     summary = {
         "complete_pairs": n,
+        "available_complete_pairs": available_complete,
+        "extra_complete_trials_excluded_from_primary": extra_complete,
         "attempts_including_original": len(candidates),
         "excluded_attempts": excluded,
         "complete_trials": complete,
@@ -247,7 +253,7 @@ def analyze(expected_complete, bootstrap_replicates, output):
             "absolute_shift_interval": "Descriptive uncertainty only: a positive lower bound is not a test of a nonzero shift.",
             "baseline_modes": "Unique modes computed from all 200 individual runs; held fixed for descriptive mode-match rates, no interval estimated.",
             "comparison": "Independent blank-memory benchmarks versus seeded dialogue plus memory-framed rating prompts; not a paired before/after causal estimate.",
-            "selection": "Failed attempts are retained and excluded from rating comparisons; replacements condition the analyzed sample on completion.",
+            "selection": "Use the first requested number of complete trials in start-time order, including the original. Retain incomplete and later complete attempts separately. Results are conditional on completion.",
         },
     }
     boot_base_probs = {}
@@ -370,7 +376,7 @@ def analyze(expected_complete, bootstrap_replicates, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--expected-complete", type=int, default=20)
+    parser.add_argument("--expected-complete", type=int, default=10)
     parser.add_argument("--bootstrap-replicates", type=int, default=10000)
     parser.add_argument(
         "--output",

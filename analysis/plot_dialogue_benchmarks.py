@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from reportlab.graphics import renderSVG
-from reportlab.graphics.shapes import Circle, Drawing, Line, Rect, String
+from reportlab.graphics.shapes import Circle, Drawing, Line, Polygon, Rect, String
 from reportlab.lib.colors import HexColor, white
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -15,6 +15,10 @@ DEFAULT = PROJECT / "ratings/archive/dialogue-benchmark-comparison"
 def render_comparison(source, destination):
     """Show each agent's baseline and post-dialogue mean on the same 1-to-5 scale."""
     summary = json.loads(source.read_text())
+    target_path = source.parent / "complementation.json"
+    target = (
+        json.loads(target_path.read_text())["mingled"] if target_path.exists() else None
+    )
     width, height = 1190, 690
     drawing = Drawing(width, height)
     ink = HexColor("#172b3a")
@@ -22,6 +26,7 @@ def render_comparison(source, destination):
     grid = HexColor("#dce3e7")
     baseline_color = HexColor("#738392")
     post_color = HexColor("#006e91")
+    target_color = HexColor("#b86205")
     drawing.add(Rect(0, 0, width, height, fillColor=white, strokeColor=None))
 
     def text(x, y, value, size=12, color=ink, anchor="start", bold=False):
@@ -40,14 +45,18 @@ def render_comparison(source, destination):
     text(
         30,
         653,
-        "Ratings after dialogue compared with individual benchmarks",
+        (
+            "Individual, post-dialogue, and Mingled ratings"
+            if target
+            else "Ratings after dialogue compared with individual benchmarks"
+        ),
         23,
         bold=True,
     )
     text(
         30,
         626,
-        f"{summary['complete_pairs']} complete dialogue trials per agent; 200 individual benchmark runs per agent",
+        f"{summary['complete_pairs']} complete dialogue trials per agent; 200 individual benchmark runs per persona",
         13,
         muted,
     )
@@ -97,10 +106,19 @@ def render_comparison(source, destination):
                 )
             )
             drawing.add(Circle(px, y, 4.2, fillColor=post_color, strokeColor=None))
+            if target:
+                tx = left + (target["means"][i] - 1) * plot_width / 4
+                drawing.add(
+                    Polygon(
+                        [tx, y + 6, tx + 4, y + 10, tx, y + 14, tx - 4, y + 10],
+                        fillColor=target_color,
+                        strokeColor=None,
+                    )
+                )
             text(
                 left + plot_width + 40,
                 y - 4,
-                f"{post - base:+.2f}",
+                f"{post - base:+.3f}",
                 11,
                 anchor="middle",
             )
@@ -112,6 +130,15 @@ def render_comparison(source, destination):
     text(47, 75, "Individual benchmark mean", 12)
     drawing.add(Circle(272, 79, 4.2, fillColor=post_color, strokeColor=None))
     text(284, 75, "Post-dialogue mean", 12)
+    if target:
+        drawing.add(
+            Polygon(
+                [470, 75, 474, 79, 470, 83, 466, 79],
+                fillColor=target_color,
+                strokeColor=None,
+            )
+        )
+        text(482, 75, "Mingled target mean (Y)", 12)
     text(
         30,
         47,

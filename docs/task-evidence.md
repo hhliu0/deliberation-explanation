@@ -1762,3 +1762,105 @@ existing Black formatting passed. No test suite, simulated model runner,
 dependencies, security-control changes, push, or deployment was introduced.
 Lead exact model/effort, agent elapsed time and total assistant usage/cost are
 unknown. Final collection and numerical results will be recorded below.
+
+Final collection scope and stop:
+- The user subsequently requested stopping at 10 complete trials. The batch was
+  interrupted gracefully using SIGINT on its active workflow. That workflow
+  saved 11 accepted replies and returned 130; the wrapper then exited without
+  launching further work. No replacements were launched.
+- By interruption, 11 trials including the original had already completed.
+  Primary analysis uses the first 10 complete trials by start time: original
+  c2b6db26719e47dba55c7dca8134dabf plus additional attempt 1 and attempts 3-10.
+  Extra complete attempt 11 (93ab68389c5c40299030d23f07d1b9ed) remains archived
+  and is explicitly excluded from the primary analysis.
+- Attempt 2 (cdca38411e22426f91f1e384bfdb9cf3) stopped after 4 accepted replies
+  when the next reply reached 512 output tokens and failed completion validation.
+  Attempt 12 (825494de11e940c4856da22101273bc8) stopped at the user's request
+  after 11 accepted replies, with one provider outcome unknown. These are kept
+  separately from the extra completed trial. No truncated/rejected answer was
+  passed into rating memory. There were 13 total attempts including the original.
+- All 20 prompt files still exactly match the saved batch-start SHA-256 hashes.
+  Collection logs, attempt exit statuses, and input hashes are copied into the
+  ignored ratings/archive/dialogue-benchmark-comparison/ result folder.
+
+Completed ten-trial comparison:
+- Bundled Python executed analysis/compare_dialogue_benchmarks.py
+  --expected-complete 10 with 10,000 bootstrap replicates (seed 20261116).
+  comparison.json contains the full table, selected/excluded IDs, distributions,
+  seeds and intervals; source_manifest.json contains source paths and hashes.
+- Mean absolute per-statement mean change from each own benchmark: Skeptic
+  0.1666667 points; Extrapolator 0.2175. The scale is 1-5 and these descriptive
+  means treat category spacing equally.
+- Between-agent expected absolute gap in independently sampled benchmarks is
+  0.8971917 points, versus paired post-dialogue gap 0.75 (16.4% smaller).
+  Exact agreement rises from 43.5502% to 51.6667% (62/120 paired ratings).
+  Gap-change 95% bootstrap interval is [-0.307814, +0.002763]; agreement-change
+  interval is [-0.000738, +0.174921]. These intervals cross zero, so a population
+  convergence claim is not established by this ten-trial sample.
+- Largest benchmark-relative changes: Skeptic S10 +0.695; Extrapolator S7
+  -0.685 and S5 +0.57. All three post means lie close to the supplied seeds,
+  so these differences cannot be attributed specifically to dialogue.
+- Independent reviewer recomputed results without importing the implementation:
+  483 checks passed, including 437 source hashes, cohort, IDs, all primary
+  metrics and both convergence intervals. Its two cohort-hardening suggestions
+  were incorporated and confirmed.
+
+Two-agent complementation calculation with Mingled as Y:
+- The user's new request authorizes reading complementation_note/ and computing
+  the paper's score. The user explicitly fixed the pool as Skeptic/Extrapolator,
+  twelve statements, and Mingled as Y. The existing untracked notes remain
+  unchanged and are not committed.
+- Governing complementation_paper.pdf defines full-vector
+  C_A=I(X_B;Y|X_A), C_B=I(X_A;Y|X_B), in nats, without independence across
+  statements. The older score note uses a special independent-statement model;
+  that model and its bits normalization are not substituted here.
+- Mingled source is ratings/archive/check mingle stability: all 200 current
+  records are valid, composite persona is verified, memories are empty, statement
+  order matches, and thinking is disabled. There are 62 unique full vectors.
+  Latest record b77274118cdb41568915340fc9837c8a starts at 11:00:41 UTC.
+  This current archive differs from the older support draft, which described
+  199 valid records plus a failed attempt. Current calculations use all 200
+  observed valid files, not the stale 199 denominator.
+- There is no recorded joint linkage from the independently sampled Mingled
+  outputs to baseline or post-dialogue A/B outcomes. The notes explicitly warn
+  that matching trial indices does not define such a coupling. The user clarified
+  the pool and Y but did not provide a joint model. The lead stated this gap and
+  the independent-draw modeling assumption before calculating.
+- analysis/compute_complementation.py explicitly computes the empirical product
+  model P_A P_B P_Y for baseline and P_AB(post) P_Y after dialogue, retaining
+  observed post A/B pairing and all within-vector statement dependence. Under
+  these laws H(Y|A)=H(Y|B)=H(Y|A,B)=Hhat(Y)=3.2566561965640193 nats, so all four
+  model scores are exactly zero by construction. These are NOT identified
+  coupled-population scores and NOT evidence that agents cannot learn.
+  complementation.json and CLI output prominently record this limitation.
+- Sparse-support diagnostic: in the ten paired vectors there are 5 distinct A,
+  9 distinct B and 9 distinct AB outcomes. Empirical H(A|B)=0, while H(B|A)=
+  0.9364262454 nats. Conditional on this exact empirical AB law, C_B=0 under
+  any target coupling and 0<=C_A<=0.9364262454 (upper bound not claimed sharp).
+  This finite-sample property does not identify population conditional entropies.
+- Separate descriptive distance to Mingled's mean profile (not a complementation
+  score): Skeptic 0.4420833 -> 0.50875, +15.0801%; Extrapolator 0.44375 ->
+  0.2904167, -34.5540%. Whole-trial bootstrap difference intervals (10,000,
+  seed 20261117): S [+0.005833,+0.131667], E [-0.225,-0.04375]. These are
+  conditional, exploratory comparisons including seed/prompt changes.
+- Independent reviewer passed 825 further source/numerical checks: all 200
+  Mingled vectors, unique IDs, inputs, entropy, distances, intervals and explicit
+  construction of post P_AB x P_Y. Its metadata/provenance recommendations were
+  incorporated: CLI warning, empirical plug-in entropy label, and upstream
+  manifest hash with baseline-source hash verification. No model calls occurred
+  during analysis.
+
+Final verification/delivery:
+- Bundled Python runs both analysis scripts successfully. Existing Black --check
+  passes all three analysis modules; AST and git diff --check pass. No automated
+  test suite was added or run; direct numerical/source checks are described above.
+- All source manifests and unchanged prompt hashes were rechecked by the lead.
+- analysis/plot_dialogue_benchmarks.py creates the static comparison.svg with
+  baseline, dialogue and Mingled mean markers. The installed Chrome rendered it
+  to comparison.png through the existing Playwright library, with network requests
+  blocked and browser sandbox enabled. The lead visually inspected the final
+  chart: all twelve labels, two panels, legends, values and qualifications fit.
+  No browser/dependency setup or installation occurred.
+- The main result folder contains comparison.json, complementation.json,
+  manifests, the figure and collection evidence. Source/evidence work is local;
+  no push, PR, shared-branch merge, deployment or external reporting occurred.
